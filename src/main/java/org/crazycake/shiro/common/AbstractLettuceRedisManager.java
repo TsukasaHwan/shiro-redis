@@ -20,29 +20,32 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulConnection<?
     protected static final int DEFAULT_COUNT = 100;
 
     /**
-     * redis host
+     * Redis server host.
      */
-    protected String host;
-
-    protected int port;
+    protected String host = "localhost";
 
     /**
-     * timeout for RedisClient try to connect to redis server, not expire time! unit seconds
+     * Redis server port.
+     */
+    protected int port = 6379;
+
+    /**
+     * timeout for RedisClient try to connect to redis server, not expire time! unit seconds.
      */
     protected Duration timeout = RedisURI.DEFAULT_TIMEOUT_DURATION;
 
     /**
-     * redis database
+     * Redis database.
      */
     protected int database = 0;
 
     /**
-     * redis password
+     * Redis password.
      */
     protected String password;
 
     /**
-     * Whether to enable async
+     * Whether to enable async.
      */
     protected boolean isAsync = false;
 
@@ -62,7 +65,7 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulConnection<?
     private GenericObjectPoolConfig<T> genericObjectPoolConfig = new GenericObjectPoolConfig<>();
 
     /**
-     * GenericObjectPool
+     * GenericObjectPool.
      */
     protected volatile GenericObjectPool<T> genericObjectPool;
 
@@ -81,7 +84,6 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulConnection<?
     public void setHost(String host) {
         this.host = host;
     }
-
 
 
     public Duration getTimeout() {
