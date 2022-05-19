@@ -85,6 +85,13 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulConnection<?
         this.host = host;
     }
 
+    public int getPort() {
+        return port;
+    }
+
+    public void setPort(int port) {
+        this.port = port;
+    }
 
     public Duration getTimeout() {
         return timeout;
