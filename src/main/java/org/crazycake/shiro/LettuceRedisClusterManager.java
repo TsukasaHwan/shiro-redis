@@ -22,8 +22,7 @@ import java.util.stream.Collectors;
  * @author Teamo
  * @date 2022/05/19
  */
-public class LettuceRedisClusterManager
-        extends AbstractLettuceRedisManager<StatefulRedisClusterConnection<byte[], byte[]>> {
+public class LettuceRedisClusterManager extends AbstractLettuceRedisManager<StatefulRedisClusterConnection<byte[], byte[]>> {
     /**
      * Comma-separated list of "host:port" pairs to bootstrap from. This represents an
      * "initial" list of cluster nodes and is required to have at least one entry.
@@ -33,9 +32,9 @@ public class LettuceRedisClusterManager
     /**
      * clusterClientOptions used to initialize RedisClient.
      */
-    protected ClusterClientOptions clusterClientOptions = ClusterClientOptions.create();
+    private ClusterClientOptions clusterClientOptions = ClusterClientOptions.create();
 
-    private void init() {
+    private void initialize() {
         if (genericObjectPool == null) {
             synchronized (LettuceRedisClusterManager.class) {
                 if (genericObjectPool == null) {
@@ -44,6 +43,18 @@ public class LettuceRedisClusterManager
                     genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> redisClusterClient.connect(new ByteArrayCodec()), getGenericObjectPoolConfig());
                 }
             }
+        }
+    }
+
+    @Override
+    protected StatefulRedisClusterConnection<byte[], byte[]> getStatefulConnection() {
+        if (genericObjectPool == null) {
+            initialize();
+        }
+        try {
+            return genericObjectPool.borrowObject();
+        } catch (Exception e) {
+            throw new PoolException("Could not get a resource from the pool", e);
         }
     }
 
@@ -56,25 +67,13 @@ public class LettuceRedisClusterManager
     }
 
     @Override
-    protected StatefulRedisClusterConnection<byte[], byte[]> getStatefulConnection() {
-        if (genericObjectPool == null) {
-            init();
-        }
-        try {
-            return genericObjectPool.borrowObject();
-        } catch (Exception e) {
-            throw new PoolException("Could not get a resource from the pool", e);
-        }
-    }
-
-    @Override
     public byte[] get(byte[] key) {
         if (key == null) {
             return null;
         }
         byte[] value = null;
         try (StatefulRedisClusterConnection<byte[], byte[]> connection = getStatefulConnection()) {
-            if (isAsync) {
+            if (isAsync()) {
                 RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
                 RedisFuture<byte[]> redisFuture = async.get(key);
                 value = redisFuture.get();
@@ -94,7 +93,7 @@ public class LettuceRedisClusterManager
             return null;
         }
         try (StatefulRedisClusterConnection<byte[], byte[]> connection = getStatefulConnection()) {
-            if (isAsync) {
+            if (isAsync()) {
                 RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
                 async.set(key, value);
                 if (expire > 0) {
@@ -114,7 +113,7 @@ public class LettuceRedisClusterManager
     @Override
     public void del(byte[] key) {
         try (StatefulRedisClusterConnection<byte[], byte[]> connection = getStatefulConnection()) {
-            if (isAsync) {
+            if (isAsync()) {
                 RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
                 async.del(key);
             } else {
@@ -129,7 +128,7 @@ public class LettuceRedisClusterManager
         long dbSize = 0L;
         KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
         scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
-        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
+        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(getCount());
         try (StatefulRedisClusterConnection<byte[], byte[]> connection = getStatefulConnection()) {
             while (!scanCursor.isFinished()) {
                 scanCursor = getKeyScanCursor(connection, scanCursor, scanArgs);
@@ -146,7 +145,7 @@ public class LettuceRedisClusterManager
         Set<byte[]> keys = new HashSet<>(16);
         KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
         scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
-        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
+        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(getCount());
         try (StatefulRedisClusterConnection<byte[], byte[]> connection = getStatefulConnection()) {
             while (!scanCursor.isFinished()) {
                 scanCursor = getKeyScanCursor(connection, scanCursor, scanArgs);
@@ -169,7 +168,7 @@ public class LettuceRedisClusterManager
      * @throws InterruptedException If the current thread is interrupted while waiting
      */
     private KeyScanCursor<byte[]> getKeyScanCursor(final StatefulRedisClusterConnection<byte[], byte[]> connection, KeyScanCursor<byte[]> scanCursor, ScanArgs scanArgs) throws ExecutionException, InterruptedException {
-        if (isAsync) {
+        if (isAsync()) {
             RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
             RedisFuture<KeyScanCursor<byte[]>> scan = async.scan(scanCursor, scanArgs);
             scanCursor = scan.get();

@@ -3,6 +3,7 @@ package org.crazycake.shiro;
 import io.lettuce.core.ReadFrom;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
+import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.masterreplica.MasterReplica;
 import io.lettuce.core.masterreplica.StatefulRedisMasterReplicaConnection;
@@ -22,11 +23,11 @@ public class LettuceRedisSentinelManager extends LettuceRedisManager {
 
     private ReadFrom readFrom = ReadFrom.UPSTREAM;
 
-    private void init() {
+    private void initialize() {
         if (genericObjectPool == null) {
             synchronized (LettuceRedisSentinelManager.class) {
                 if (genericObjectPool == null) {
-                    RedisURI redisURI = createRedisURI(new String[]{host, String.valueOf(port)});
+                    RedisURI redisURI = createRedisURI(new String[]{getHost(), String.valueOf(getPort())});
                     RedisClient redisClient = RedisClient.create(redisURI);
                     redisClient.setOptions(getClientOptions());
                     StatefulRedisMasterReplicaConnection<byte[], byte[]> connect = MasterReplica.connect(redisClient, new ByteArrayCodec(), redisURI);
@@ -38,12 +39,12 @@ public class LettuceRedisSentinelManager extends LettuceRedisManager {
     }
 
     @Override
-    protected StatefulRedisMasterReplicaConnection<byte[], byte[]> getStatefulConnection() {
+    protected StatefulRedisConnection<byte[], byte[]> getStatefulConnection() {
         if (genericObjectPool == null) {
-            init();
+            initialize();
         }
         try {
-            return (StatefulRedisMasterReplicaConnection<byte[], byte[]>) genericObjectPool.borrowObject();
+            return genericObjectPool.borrowObject();
         } catch (Exception e) {
             throw new PoolException("Could not get a resource from the pool", e);
         }
@@ -52,8 +53,9 @@ public class LettuceRedisSentinelManager extends LettuceRedisManager {
     @Override
     protected RedisURI createRedisURI(String[] hostAndPort) {
         RedisURI.Builder builder = RedisURI.builder()
-                .withDatabase(database)
-                .withTimeout(timeout);
+                .withDatabase(getDatabase())
+                .withTimeout(getTimeout());
+        String password = getPassword();
         if (password != null) {
             builder.withPassword(password.toCharArray());
         }

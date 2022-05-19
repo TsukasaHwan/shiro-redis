@@ -17,42 +17,42 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulConnection<?
     /**
      * Default value of count.
      */
-    protected static final int DEFAULT_COUNT = 100;
+    private static final int DEFAULT_COUNT = 100;
 
     /**
      * Redis server host.
      */
-    protected String host = "localhost";
+    private String host = "localhost";
 
     /**
      * Redis server port.
      */
-    protected int port = 6379;
+    private int port = 6379;
 
     /**
      * timeout for RedisClient try to connect to redis server, not expire time! unit seconds.
      */
-    protected Duration timeout = RedisURI.DEFAULT_TIMEOUT_DURATION;
+    private Duration timeout = RedisURI.DEFAULT_TIMEOUT_DURATION;
 
     /**
      * Redis database.
      */
-    protected int database = 0;
+    private int database = 0;
 
     /**
      * Redis password.
      */
-    protected String password;
+    private String password;
 
     /**
      * Whether to enable async.
      */
-    protected boolean isAsync = false;
+    private boolean isAsync = false;
 
     /**
      * The number of elements returned at every iteration.
      */
-    protected int count = DEFAULT_COUNT;
+    private int count = DEFAULT_COUNT;
 
     /**
      * ClientOptions used to initialize RedisClient.
@@ -70,10 +70,9 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulConnection<?
     protected volatile GenericObjectPool<T> genericObjectPool;
 
     /**
-     * We will operate redis through StatefulRedisConnection object.
-     * Subclasses should obtain StatefulConnection objects by implementing getStatefulConnection().
+     * Get a stateful connection.
      *
-     * @return StatefulConnection
+     * @return T
      */
     protected abstract T getStatefulConnection();
 
@@ -147,14 +146,6 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulConnection<?
 
     public void setGenericObjectPoolConfig(GenericObjectPoolConfig<T> genericObjectPoolConfig) {
         this.genericObjectPoolConfig = genericObjectPoolConfig;
-    }
-
-    public GenericObjectPool<T> getGenericObjectPool() {
-        return genericObjectPool;
-    }
-
-    public void setGenericObjectPool(GenericObjectPool<T> genericObjectPool) {
-        this.genericObjectPool = genericObjectPool;
     }
 
     /**

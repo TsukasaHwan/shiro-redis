@@ -19,15 +19,13 @@ import java.util.concurrent.ExecutionException;
  * @author Teamo
  * @date 2022/05/18
  */
-public class LettuceRedisManager
-        extends AbstractLettuceRedisManager<StatefulRedisConnection<byte[], byte[]>> {
+public class LettuceRedisManager extends AbstractLettuceRedisManager<StatefulRedisConnection<byte[], byte[]>> {
 
-    private void init() {
+    private void initialize() {
         if (genericObjectPool == null) {
             synchronized (LettuceRedisManager.class) {
                 if (genericObjectPool == null) {
-                    String[] hostAndPort = new String[]{host, String.valueOf(port)};
-                    RedisClient redisClient = RedisClient.create(createRedisURI(hostAndPort));
+                    RedisClient redisClient = RedisClient.create(createRedisURI(new String[]{getHost(), String.valueOf(getPort())}));
                     redisClient.setOptions(getClientOptions());
                     genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> redisClient.connect(new ByteArrayCodec()), getGenericObjectPoolConfig());
                 }
@@ -38,7 +36,7 @@ public class LettuceRedisManager
     @Override
     protected StatefulRedisConnection<byte[], byte[]> getStatefulConnection() {
         if (genericObjectPool == null) {
-            init();
+            initialize();
         }
         try {
             return genericObjectPool.borrowObject();
@@ -54,7 +52,7 @@ public class LettuceRedisManager
         }
         byte[] value = null;
         try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
-            if (isAsync) {
+            if (isAsync()) {
                 RedisAsyncCommands<byte[], byte[]> async = connect.async();
                 RedisFuture<byte[]> redisFuture = async.get(key);
                 value = redisFuture.get();
@@ -74,7 +72,7 @@ public class LettuceRedisManager
             return null;
         }
         try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
-            if (isAsync) {
+            if (isAsync()) {
                 RedisAsyncCommands<byte[], byte[]> async = connect.async();
                 async.set(key, value);
                 if (expire > 0) {
@@ -94,7 +92,7 @@ public class LettuceRedisManager
     @Override
     public void del(byte[] key) {
         try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
-            if (isAsync) {
+            if (isAsync()) {
                 RedisAsyncCommands<byte[], byte[]> async = connect.async();
                 async.del(key);
             } else {
@@ -109,7 +107,7 @@ public class LettuceRedisManager
         long dbSize = 0L;
         KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
         scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
-        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
+        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(getCount());
         try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
             while (!scanCursor.isFinished()) {
                 scanCursor = getKeyScanCursor(connect, scanCursor, scanArgs);
@@ -126,7 +124,7 @@ public class LettuceRedisManager
         Set<byte[]> keys = new HashSet<>(16);
         KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
         scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
-        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
+        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(getCount());
         try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
             while (!scanCursor.isFinished()) {
                 scanCursor = getKeyScanCursor(connect, scanCursor, scanArgs);
@@ -149,7 +147,7 @@ public class LettuceRedisManager
      * @throws InterruptedException If the current thread is interrupted while waiting
      */
     private KeyScanCursor<byte[]> getKeyScanCursor(final StatefulRedisConnection<byte[], byte[]> connect, KeyScanCursor<byte[]> scanCursor, ScanArgs scanArgs) throws ExecutionException, InterruptedException {
-        if (isAsync) {
+        if (isAsync()) {
             RedisAsyncCommands<byte[], byte[]> async = connect.async();
             RedisFuture<KeyScanCursor<byte[]>> scan = async.scan(scanCursor, scanArgs);
             scanCursor = scan.get();
