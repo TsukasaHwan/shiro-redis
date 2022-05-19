@@ -4,13 +4,13 @@ package org.crazycake.shiro.exception;
  * @author Teamo
  * @date 2022/05/18
  */
-public class LettucePoolException extends RuntimeException {
+public class PoolException extends RuntimeException {
     /**
      * Constructs a new <code>LettucePoolException</code> instance.
      *
      * @param msg the detail message.
      */
-    public LettucePoolException(String msg) {
+    public PoolException(String msg) {
         super(msg);
     }
 
@@ -20,7 +20,7 @@ public class LettucePoolException extends RuntimeException {
      * @param msg   the detail message.
      * @param cause the nested exception.
      */
-    public LettucePoolException(String msg, Throwable cause) {
+    public PoolException(String msg, Throwable cause) {
         super(msg, cause);
     }
 }
