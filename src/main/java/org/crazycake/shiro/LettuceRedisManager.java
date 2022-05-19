@@ -21,16 +21,12 @@ import java.util.concurrent.ExecutionException;
  */
 public class LettuceRedisManager
         extends AbstractLettuceRedisManager<StatefulRedisConnection<byte[], byte[]>> {
-    private static final String DEFAULT_HOST = "127.0.0.1:6379";
 
     private void init() {
         if (genericObjectPool == null) {
             synchronized (LettuceRedisManager.class) {
                 if (genericObjectPool == null) {
-                    if (host == null) {
-                        host = DEFAULT_HOST;
-                    }
-                    String[] hostAndPort = host.split(":");
+                    String[] hostAndPort = new String[]{host, String.valueOf(port)};
                     RedisClient redisClient = RedisClient.create(createRedisURI(hostAndPort));
                     redisClient.setOptions(getClientOptions());
                     genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> redisClient.connect(new ByteArrayCodec()), getGenericObjectPoolConfig());

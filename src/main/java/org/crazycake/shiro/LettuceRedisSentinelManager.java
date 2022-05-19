@@ -9,7 +9,6 @@ import io.lettuce.core.masterreplica.StatefulRedisMasterReplicaConnection;
 import io.lettuce.core.support.ConnectionPoolSupport;
 import org.crazycake.shiro.exception.PoolException;
 
-import java.time.Duration;
 import java.util.Set;
 
 /**
@@ -17,8 +16,6 @@ import java.util.Set;
  * @date 2022/05/19
  */
 public class LettuceRedisSentinelManager extends LettuceRedisManager {
-    private static final String DEFAULT_HOST = "127.0.0.1:26379";
-
     private static final String DEFAULT_MASTER_NAME = "mymaster";
 
     private String masterName = DEFAULT_MASTER_NAME;
@@ -29,11 +26,7 @@ public class LettuceRedisSentinelManager extends LettuceRedisManager {
         if (genericObjectPool == null) {
             synchronized (LettuceRedisSentinelManager.class) {
                 if (genericObjectPool == null) {
-                    if (host == null) {
-                        host = DEFAULT_HOST;
-                    }
-                    String[] hostAndPort = host.split(":");
-                    RedisURI redisURI = createRedisURI(hostAndPort);
+                    RedisURI redisURI = createRedisURI(new String[]{host, String.valueOf(port)});
                     RedisClient redisClient = RedisClient.create(redisURI);
                     redisClient.setOptions(getClientOptions());
                     StatefulRedisMasterReplicaConnection<byte[], byte[]> connect = MasterReplica.connect(redisClient, new ByteArrayCodec(), redisURI);
@@ -60,7 +53,7 @@ public class LettuceRedisSentinelManager extends LettuceRedisManager {
     protected RedisURI createRedisURI(String[] hostAndPort) {
         RedisURI.Builder builder = RedisURI.builder()
                 .withDatabase(database)
-                .withTimeout(Duration.ofSeconds(timeout));
+                .withTimeout(timeout);
         if (password != null) {
             builder.withPassword(password.toCharArray());
         }

@@ -24,10 +24,12 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulConnection<?
      */
     protected String host;
 
+    protected int port;
+
     /**
      * timeout for RedisClient try to connect to redis server, not expire time! unit seconds
      */
-    protected long timeout = RedisURI.DEFAULT_TIMEOUT;
+    protected Duration timeout = RedisURI.DEFAULT_TIMEOUT_DURATION;
 
     /**
      * redis database
@@ -80,11 +82,13 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulConnection<?
         this.host = host;
     }
 
-    public long getTimeout() {
+
+
+    public Duration getTimeout() {
         return timeout;
     }
 
-    public void setTimeout(long timeout) {
+    public void setTimeout(Duration timeout) {
         this.timeout = timeout;
     }
 
@@ -155,7 +159,7 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulConnection<?
                 .withHost(hostAndPort[0])
                 .withPort(Integer.parseInt(hostAndPort[1]))
                 .withDatabase(database)
-                .withTimeout(Duration.ofSeconds(timeout));
+                .withTimeout(timeout);
         if (password != null) {
             builder.withPassword(password.toCharArray());
         }

@@ -12,8 +12,11 @@ import org.crazycake.shiro.common.AbstractLettuceRedisManager;
 import org.crazycake.shiro.exception.PoolException;
 
 import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 /**
  * @author Teamo
@@ -21,8 +24,11 @@ import java.util.concurrent.ExecutionException;
  */
 public class LettuceRedisClusterManager
         extends AbstractLettuceRedisManager<StatefulRedisClusterConnection<byte[], byte[]>> {
-
-    private static final String DEFAULT_HOST = "127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002";
+    /**
+     * Comma-separated list of "host:port" pairs to bootstrap from. This represents an
+     * "initial" list of cluster nodes and is required to have at least one entry.
+     */
+    private List<String> nodes;
 
     /**
      * clusterClientOptions used to initialize RedisClient.
@@ -33,7 +39,7 @@ public class LettuceRedisClusterManager
         if (genericObjectPool == null) {
             synchronized (LettuceRedisClusterManager.class) {
                 if (genericObjectPool == null) {
-                    RedisClusterClient redisClusterClient = RedisClusterClient.create(getHostAndPortSet());
+                    RedisClusterClient redisClusterClient = RedisClusterClient.create(getClusterRedisURI());
                     redisClusterClient.setOptions(getClusterClientOptions());
                     genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> redisClusterClient.connect(new ByteArrayCodec()), getGenericObjectPoolConfig());
                 }
@@ -41,17 +47,12 @@ public class LettuceRedisClusterManager
         }
     }
 
-    private Set<RedisURI> getHostAndPortSet() {
-        if (host == null) {
-            host = DEFAULT_HOST;
-        }
-        String[] hostAndPortArr = host.split(",");
-        Set<RedisURI> redisURISet = new HashSet<>();
-        for (String hostAndPortStr : hostAndPortArr) {
-            String[] hostAndPort = hostAndPortStr.split(":");
-            redisURISet.add(createRedisURI(hostAndPort));
-        }
-        return redisURISet;
+    private List<RedisURI> getClusterRedisURI() {
+        Objects.requireNonNull(nodes, "nodes must not be null!");
+        return nodes.stream().map(node -> {
+            String[] hostAndPort = node.split(":");
+            return createRedisURI(hostAndPort);
+        }).collect(Collectors.toList());
     }
 
     @Override
@@ -177,6 +178,14 @@ public class LettuceRedisClusterManager
             scanCursor = sync.scan(scanCursor, scanArgs);
         }
         return scanCursor;
+    }
+
+    public List<String> getNodes() {
+        return nodes;
+    }
+
+    public void setNodes(List<String> nodes) {
+        this.nodes = nodes;
     }
 
     public ClusterClientOptions getClusterClientOptions() {
