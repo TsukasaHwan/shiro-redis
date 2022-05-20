@@ -2,6 +2,7 @@ package org.crazycake.shiro;
 
 import org.apache.shiro.subject.PrincipalCollection;
 import org.crazycake.shiro.exception.SerializationException;
+import org.crazycake.shiro.jedis.manager.RedisManager;
 import org.crazycake.shiro.serializer.ObjectSerializer;
 import org.crazycake.shiro.serializer.StringSerializer;
 import org.junit.jupiter.api.Assertions;
@@ -13,9 +14,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.CoreMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 public class RedisCacheTest {
     private IRedisManager redisManager;

@@ -1,4 +1,4 @@
-package org.crazycake.shiro.common;
+package org.crazycake.shiro.lettuce;
 
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.RedisURI;

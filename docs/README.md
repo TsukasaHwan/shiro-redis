@@ -97,63 +97,45 @@ If you are running Redis in Standalone mode
 #====================================
 # shiro-redis configuration [start]
 #====================================
-
 #===================================
 # Redis Manager [start]
 #===================================
-
 # Create redisManager
-redisManager = org.crazycake.shiro.RedisManager
-
+redisManager=org.crazycake.shiro.jedis.manager.RedisManager
 # Redis host. If you don't specify host the default value is 127.0.0.1:6379
-redisManager.host = 127.0.0.1:6379
-
+redisManager.host=127.0.0.1:6379
 #===================================
 # Redis Manager [end]
 #===================================
-
 #=========================================
 # Redis session DAO [start]
 #=========================================
-
 # Create redisSessionDAO
-redisSessionDAO = org.crazycake.shiro.RedisSessionDAO
-
+redisSessionDAO=org.crazycake.shiro.RedisSessionDAO
 # Use redisManager as cache manager
-redisSessionDAO.redisManager = $redisManager
-
-sessionManager = org.apache.shiro.web.session.mgt.DefaultWebSessionManager
-
-sessionManager.sessionDAO = $redisSessionDAO
-
-securityManager.sessionManager = $sessionManager
-
+redisSessionDAO.redisManager=$redisManager
+sessionManager=org.apache.shiro.web.session.mgt.DefaultWebSessionManager
+sessionManager.sessionDAO=$redisSessionDAO
+securityManager.sessionManager=$sessionManager
 #=========================================
 # Redis session DAO [end]
 #=========================================
-
 #==========================================
 # Redis cache manager [start]
 #==========================================
-
 # Create cacheManager
-cacheManager = org.crazycake.shiro.RedisCacheManager
-
+cacheManager=org.crazycake.shiro.RedisCacheManager
 # Principal id field name. The field which you can get unique id to identify this principal.
 # For example, if you use UserInfo as Principal class, the id field maybe `id`, `userId`, `email`, etc.
 # Remember to add getter to this id field. For example, `getId()`, `getUserId()`, `getEmail()`, etc.
 # Default value is id, that means your principal object must has a method called `getId()`
-cacheManager.principalIdFieldName = id
-
+cacheManager.principalIdFieldName=id
 # Use redisManager as cache manager
-cacheManager.redisManager = $redisManager
-
-securityManager.cacheManager = $cacheManager
-
+cacheManager.redisManager=$redisManager
+securityManager.cacheManager=$cacheManager
 #==========================================
 # Redis cache manager [end]
 #==========================================
-
 #=================================
 # shiro-redis configuration [end]
 #=================================
@@ -165,20 +147,17 @@ Here is a [tutorial project](https://github.com/alexxiyang/shiro-redis-tutorial)
 
 ### Redis Sentinel
 if you're using Redis Sentinel, please replace the `redisManager` configuration of the standalone version into the following:
+
 ```properties
 #===================================
 # Redis Manager [start]
 #===================================
-
 # Create redisManager
-redisManager = org.crazycake.shiro.RedisSentinelManager
-
+redisManager=org.crazycake.shiro.jedis.manager.RedisSentinelManager
 # Sentinel host. If you don't specify host the default value is 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
-redisManager.host = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
-
+redisManager.host=127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
 # Sentinel master name
-redisManager.masterName = mymaster
-
+redisManager.masterName=mymaster
 #===================================
 # Redis Manager [end]
 #===================================
@@ -193,13 +172,10 @@ If you're using redis cluster, please replace the `redisManager` configuration o
 #===================================
 # Redis Manager [start]
 #===================================
-
 # Create redisManager
-redisManager = org.crazycake.shiro.RedisClusterManager
-
+redisManager=org.crazycake.shiro.jedis.manager.RedisClusterManager
 # Redis host and port list
-redisManager.host = 192.168.21.3:7000,192.168.21.3:7001,192.168.21.3:7002,192.168.21.3:7003,192.168.21.3:7004,192.168.21.3:7005
-
+redisManager.host=192.168.21.3:7000,192.168.21.3:7001,192.168.21.3:7002,192.168.21.3:7003,192.168.21.3:7004,192.168.21.3:7005
 #===================================
 # Redis Manager [end]
 #===================================
@@ -217,36 +193,36 @@ If you are running Redis in Standalone mode
 <!-- shiro-redis configuration [start] -->
 
 <!-- Redis Manager [start] -->
-<bean id="redisManager" class="org.crazycake.shiro.RedisManager">
+<bean id="redisManager" class="org.crazycake.shiro.jedis.manager.RedisManager">
     <property name="host" value="127.0.0.1:6379"/>
 </bean>
-<!-- Redis Manager [end] -->
+        <!-- Redis Manager [end] -->
 
-<!-- Redis session DAO [start] -->
+        <!-- Redis session DAO [start] -->
 <bean id="redisSessionDAO" class="org.crazycake.shiro.RedisSessionDAO">
-    <property name="redisManager" ref="redisManager" />
+<property name="redisManager" ref="redisManager"/>
 </bean>
 <bean id="sessionManager" class="org.apache.shiro.web.session.mgt.DefaultWebSessionManager">
-    <property name="sessionDAO" ref="redisSessionDAO" />
+<property name="sessionDAO" ref="redisSessionDAO"/>
 </bean>
-<!-- Redis session DAO [end] -->
+        <!-- Redis session DAO [end] -->
 
-<!-- Redis cache manager [start] -->
+        <!-- Redis cache manager [start] -->
 <bean id="cacheManager" class="org.crazycake.shiro.RedisCacheManager">
-    <property name="redisManager" ref="redisManager" />
+<property name="redisManager" ref="redisManager"/>
 </bean>
-<!-- Redis cache manager [end] -->
+        <!-- Redis cache manager [end] -->
 
 <bean id="securityManager" class="org.apache.shiro.web.mgt.DefaultWebSecurityManager">
-    <property name="sessionManager" ref="sessionManager" />
-    <property name="cacheManager" ref="cacheManager" />
+<property name="sessionManager" ref="sessionManager"/>
+<property name="cacheManager" ref="cacheManager"/>
 
-    <!-- other configurations -->
-    <property name="realm" ref="exampleRealm"/>
-    <property name="rememberMeManager.cipherKey" value="kPH+bIxk5D2deZiIxcaaaA==" />
+<!-- other configurations -->
+<property name="realm" ref="exampleRealm"/>
+<property name="rememberMeManager.cipherKey" value="kPH+bIxk5D2deZiIxcaaaA=="/>
 </bean>
 
-<!-- shiro-redis configuration [end] -->
+        <!-- shiro-redis configuration [end] -->
 ```
 
 For complete configurable options list, check [Configurable Options](#configurable-options).
@@ -255,10 +231,11 @@ Here is a [tutorial project](https://github.com/alexxiyang/shiro-redis-spring-tu
 
 ### Redis Sentinel
 If you use redis sentinel, please replace the `redisManager` configuration of the standalone version into the following:
+
 ```xml
 <!-- shiro-redis configuration [start] -->
 <!-- shiro redisManager -->
-<bean id="redisManager" class="org.crazycake.shiro.RedisSentinelManager">
+<bean id="redisManager" class="org.crazycake.shiro.jedis.manager.RedisSentinelManager">
     <property name="host" value="127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381"/>
     <property name="masterName" value="mymaster"/>
 </bean>
@@ -268,11 +245,13 @@ For complete configurable options list, check [Configurable Options](#configurab
 
 ### Redis Cluster
 If you use redis cluster, please replace the `redisManager` configuration of the standalone version into the following:
+
 ```xml
 <!-- shiro-redis configuration [start] -->
 <!-- shiro redisManager -->
-<bean id="redisManager" class="org.crazycake.shiro.RedisClusterManager">
-    <property name="host" value="192.168.21.3:7000,192.168.21.3:7001,192.168.21.3:7002,192.168.21.3:7003,192.168.21.3:7004,192.168.21.3:7005"/>
+<bean id="redisManager" class="org.crazycake.shiro.jedis.manager.RedisClusterManager">
+    <property name="host"
+              value="192.168.21.3:7000,192.168.21.3:7001,192.168.21.3:7002,192.168.21.3:7003,192.168.21.3:7004,192.168.21.3:7005"/>
 </bean>
 ```
 

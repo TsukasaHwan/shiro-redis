@@ -1,4 +1,4 @@
-package org.crazycake.shiro.common;
+package org.crazycake.shiro.jedis;
 
 import org.crazycake.shiro.IRedisManager;
 import redis.clients.jedis.Jedis;

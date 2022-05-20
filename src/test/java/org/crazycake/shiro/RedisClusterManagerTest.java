@@ -1,5 +1,6 @@
 package org.crazycake.shiro;
 
+import org.crazycake.shiro.jedis.manager.RedisClusterManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.JedisCluster;

@@ -1,5 +1,6 @@
-package org.crazycake.shiro;
+package org.crazycake.shiro.jedis.manager;
 
+import org.crazycake.shiro.IRedisManager;
 import redis.clients.jedis.*;
 
 import java.util.HashSet;

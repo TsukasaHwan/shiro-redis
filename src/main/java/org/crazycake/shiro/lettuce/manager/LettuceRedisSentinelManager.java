@@ -1,4 +1,4 @@
-package org.crazycake.shiro;
+package org.crazycake.shiro.lettuce.manager;
 
 import io.lettuce.core.ReadFrom;
 import io.lettuce.core.RedisClient;

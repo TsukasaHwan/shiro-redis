@@ -1,4 +1,4 @@
-package org.crazycake.shiro;
+package org.crazycake.shiro.lettuce.manager;
 
 import io.lettuce.core.*;
 import io.lettuce.core.cluster.ClusterClientOptions;
@@ -8,7 +8,8 @@ import io.lettuce.core.cluster.api.async.RedisAdvancedClusterAsyncCommands;
 import io.lettuce.core.cluster.api.sync.RedisAdvancedClusterCommands;
 import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.support.ConnectionPoolSupport;
-import org.crazycake.shiro.common.AbstractLettuceRedisManager;
+import org.apache.shiro.cache.CacheException;
+import org.crazycake.shiro.lettuce.AbstractLettuceRedisManager;
 import org.crazycake.shiro.exception.PoolException;
 
 import java.util.HashSet;
@@ -91,7 +92,7 @@ public class LettuceRedisClusterManager extends AbstractLettuceRedisManager<Stat
                 value = sync.get(key);
             }
         } catch (ExecutionException | InterruptedException e) {
-            e.printStackTrace();
+            throw new CacheException(e);
         }
         return value;
     }
@@ -144,7 +145,7 @@ public class LettuceRedisClusterManager extends AbstractLettuceRedisManager<Stat
                 dbSize += scanCursor.getKeys().size();
             }
         } catch (ExecutionException | InterruptedException e) {
-            e.printStackTrace();
+            throw new CacheException(e);
         }
         return dbSize;
     }
@@ -161,7 +162,7 @@ public class LettuceRedisClusterManager extends AbstractLettuceRedisManager<Stat
                 keys.addAll(scanCursor.getKeys());
             }
         } catch (ExecutionException | InterruptedException e) {
-            e.printStackTrace();
+            throw new CacheException(e);
         }
         return keys;
     }
