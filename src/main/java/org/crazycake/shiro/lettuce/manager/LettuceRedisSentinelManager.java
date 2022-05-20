@@ -8,6 +8,7 @@ import io.lettuce.core.masterreplica.MasterReplica;
 import io.lettuce.core.masterreplica.StatefulRedisMasterReplicaConnection;
 import io.lettuce.core.support.ConnectionPoolSupport;
 import org.crazycake.shiro.exception.PoolException;
+import org.crazycake.shiro.lettuce.AbstractLettuceRedisManager;
 
 import java.util.List;
 import java.util.Objects;
@@ -16,7 +17,8 @@ import java.util.Objects;
  * @author Teamo
  * @date 2022/05/19
  */
-public class LettuceRedisSentinelManager extends LettuceRedisManager {
+public class LettuceRedisSentinelManager
+        extends AbstractLettuceRedisManager<StatefulRedisMasterReplicaConnection<byte[], byte[]>> {
     private static final String DEFAULT_MASTER_NAME = "mymaster";
 
     private String masterName = DEFAULT_MASTER_NAME;
@@ -47,7 +49,7 @@ public class LettuceRedisSentinelManager extends LettuceRedisManager {
             initialize();
         }
         try {
-            return (StatefulRedisMasterReplicaConnection<byte[], byte[]>) genericObjectPool.borrowObject();
+            return genericObjectPool.borrowObject();
         } catch (Exception e) {
             throw new PoolException("Could not get a resource from the pool", e);
         }
