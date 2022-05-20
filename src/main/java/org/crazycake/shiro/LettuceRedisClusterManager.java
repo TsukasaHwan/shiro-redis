@@ -62,7 +62,16 @@ public class LettuceRedisClusterManager extends AbstractLettuceRedisManager<Stat
         Objects.requireNonNull(nodes, "nodes must not be null!");
         return nodes.stream().map(node -> {
             String[] hostAndPort = node.split(":");
-            return createRedisURI(hostAndPort);
+            RedisURI.Builder builder = RedisURI.builder()
+                    .withHost(hostAndPort[0])
+                    .withPort(Integer.parseInt(hostAndPort[0]))
+                    .withDatabase(getDatabase())
+                    .withTimeout(getTimeout());
+            String password = getPassword();
+            if (password != null) {
+                builder.withPassword(password.toCharArray());
+            }
+            return builder.build();
         }).collect(Collectors.toList());
     }
 

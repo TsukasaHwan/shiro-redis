@@ -25,12 +25,25 @@ public class LettuceRedisManager extends AbstractLettuceRedisManager<StatefulRed
         if (genericObjectPool == null) {
             synchronized (LettuceRedisManager.class) {
                 if (genericObjectPool == null) {
-                    RedisClient redisClient = RedisClient.create(createRedisURI(new String[]{getHost(), String.valueOf(getPort())}));
+                    RedisClient redisClient = RedisClient.create(createRedisURI());
                     redisClient.setOptions(getClientOptions());
                     genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> redisClient.connect(new ByteArrayCodec()), getGenericObjectPoolConfig());
                 }
             }
         }
+    }
+
+    private RedisURI createRedisURI() {
+        RedisURI.Builder builder = RedisURI.builder()
+                .withHost(getHost())
+                .withPort(getPort())
+                .withDatabase(getDatabase())
+                .withTimeout(getTimeout());
+        String password = getPassword();
+        if (password != null) {
+            builder.withPassword(password.toCharArray());
+        }
+        return builder.build();
     }
 
     @Override

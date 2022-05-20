@@ -147,22 +147,4 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulConnection<?
     public void setGenericObjectPoolConfig(GenericObjectPoolConfig<T> genericObjectPoolConfig) {
         this.genericObjectPoolConfig = genericObjectPoolConfig;
     }
-
-    /**
-     * create RedisURI
-     *
-     * @param hostAndPort host port string
-     * @return RedisURI
-     */
-    protected RedisURI createRedisURI(String[] hostAndPort) {
-        RedisURI.Builder builder = RedisURI.builder()
-                .withHost(hostAndPort[0])
-                .withPort(Integer.parseInt(hostAndPort[1]))
-                .withDatabase(database)
-                .withTimeout(timeout);
-        if (password != null) {
-            builder.withPassword(password.toCharArray());
-        }
-        return builder.build();
-    }
 }
