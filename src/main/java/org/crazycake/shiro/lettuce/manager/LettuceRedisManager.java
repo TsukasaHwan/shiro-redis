@@ -1,18 +1,12 @@
 package org.crazycake.shiro.lettuce.manager;
 
-import io.lettuce.core.*;
+import io.lettuce.core.RedisClient;
+import io.lettuce.core.RedisURI;
 import io.lettuce.core.api.StatefulRedisConnection;
-import io.lettuce.core.api.async.RedisAsyncCommands;
-import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.support.ConnectionPoolSupport;
-import org.apache.shiro.cache.CacheException;
 import org.crazycake.shiro.exception.PoolException;
 import org.crazycake.shiro.lettuce.AbstractLettuceRedisManager;
-
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
 
 /**
  * Singleton lettuce redis

@@ -33,9 +33,10 @@ public class LettuceRedisSentinelManager
         if (genericObjectPool == null) {
             synchronized (LettuceRedisSentinelManager.class) {
                 if (genericObjectPool == null) {
-                    RedisClient redisClient = RedisClient.create(createSentinelRedisURI());
+                    RedisURI redisURI = this.createSentinelRedisURI();
+                    RedisClient redisClient = RedisClient.create(redisURI);
                     redisClient.setOptions(getClientOptions());
-                    StatefulRedisMasterReplicaConnection<byte[], byte[]> connect = MasterReplica.connect(redisClient, new ByteArrayCodec(), createSentinelRedisURI());
+                    StatefulRedisMasterReplicaConnection<byte[], byte[]> connect = MasterReplica.connect(redisClient, new ByteArrayCodec(), redisURI);
                     connect.setReadFrom(readFrom);
                     genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> connect, getGenericObjectPoolConfig());
                 }

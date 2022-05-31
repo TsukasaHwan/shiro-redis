@@ -55,6 +55,18 @@
             <version>1.9.0</version>
         </dependency>
 
+        <!-- protostuff -->
+        <dependency>
+            <groupId>io.protostuff</groupId>
+            <artifactId>protostuff-core</artifactId>
+            <version>1.6.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.protostuff</groupId>
+            <artifactId>protostuff-runtime</artifactId>
+            <version>1.6.0</version>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -101,6 +113,15 @@
             <email>alexxiyang@gmail.com</email>
             <timezone>GMT-7</timezone>
             <organizationUrl>https://github.com/alexxiyang</organizationUrl>
+            <roles>
+            </roles>
+        </developer>
+        <developer>
+            <id>TsukasaHwan</id>
+            <name>Teamo</name>
+            <email>785415580@qq.com</email>
+            <timezone>GMT+8</timezone>
+            <organizationUrl>https://github.com/TsukasaHwan</organizationUrl>
             <roles>
             </roles>
         </developer>
