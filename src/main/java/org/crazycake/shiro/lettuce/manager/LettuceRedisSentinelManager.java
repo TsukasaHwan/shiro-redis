@@ -7,6 +7,7 @@ import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.masterreplica.MasterReplica;
 import io.lettuce.core.masterreplica.StatefulRedisMasterReplicaConnection;
 import io.lettuce.core.support.ConnectionPoolSupport;
+import org.apache.commons.pool2.impl.GenericObjectPool;
 import org.crazycake.shiro.exception.PoolException;
 import org.crazycake.shiro.lettuce.AbstractLettuceRedisManager;
 
@@ -28,6 +29,11 @@ public class LettuceRedisSentinelManager
     private String sentinelPassword;
 
     private ReadFrom readFrom = ReadFrom.REPLICA_PREFERRED;
+
+    /**
+     * GenericObjectPool.
+     */
+    private volatile GenericObjectPool<StatefulRedisMasterReplicaConnection<byte[], byte[]>> genericObjectPool;
 
     private void initialize() {
         if (genericObjectPool == null) {

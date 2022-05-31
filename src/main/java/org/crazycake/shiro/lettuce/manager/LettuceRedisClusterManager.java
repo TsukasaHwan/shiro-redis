@@ -71,7 +71,7 @@ public class LettuceRedisClusterManager implements IRedisManager {
     /**
      * GenericObjectPool.
      */
-    protected volatile GenericObjectPool<StatefulRedisClusterConnection<byte[], byte[]>> genericObjectPool;
+    private volatile GenericObjectPool<StatefulRedisClusterConnection<byte[], byte[]>> genericObjectPool;
 
     /**
      * clusterClientOptions used to initialize RedisClient.
@@ -194,7 +194,7 @@ public class LettuceRedisClusterManager implements IRedisManager {
 
     @Override
     public Set<byte[]> keys(byte[] pattern) {
-        Set<byte[]> keys = new HashSet<>(16);
+        Set<byte[]> keys = new HashSet<>();
         KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
         scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
         ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
@@ -219,7 +219,9 @@ public class LettuceRedisClusterManager implements IRedisManager {
      * @throws ExecutionException   If the calculation throws an exception
      * @throws InterruptedException If the current thread is interrupted while waiting
      */
-    private KeyScanCursor<byte[]> getKeyScanCursor(final StatefulRedisClusterConnection<byte[], byte[]> connection, KeyScanCursor<byte[]> scanCursor, ScanArgs scanArgs) throws ExecutionException, InterruptedException {
+    private KeyScanCursor<byte[]> getKeyScanCursor(final StatefulRedisClusterConnection<byte[], byte[]> connection,
+                                                   KeyScanCursor<byte[]> scanCursor,
+                                                   ScanArgs scanArgs) throws ExecutionException, InterruptedException {
         if (isAsync) {
             RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
             RedisFuture<KeyScanCursor<byte[]>> scan = async.scan(scanCursor, scanArgs);

@@ -60,11 +60,6 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
     private GenericObjectPoolConfig<T> genericObjectPoolConfig = new GenericObjectPoolConfig<>();
 
     /**
-     * GenericObjectPool.
-     */
-    protected volatile GenericObjectPool<T> genericObjectPool;
-
-    /**
      * Get a stateful connection.
      *
      * @return T
@@ -203,7 +198,7 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
 
     @Override
     public Set<byte[]> keys(byte[] pattern) {
-        Set<byte[]> keys = new HashSet<>(16);
+        Set<byte[]> keys = new HashSet<>();
         KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
         scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
         ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(getCount());
@@ -228,7 +223,9 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
      * @throws ExecutionException   If the calculation throws an exception
      * @throws InterruptedException If the current thread is interrupted while waiting
      */
-    private KeyScanCursor<byte[]> getKeyScanCursor(final StatefulRedisConnection<byte[], byte[]> connect, KeyScanCursor<byte[]> scanCursor, ScanArgs scanArgs) throws ExecutionException, InterruptedException {
+    private KeyScanCursor<byte[]> getKeyScanCursor(final StatefulRedisConnection<byte[], byte[]> connect,
+                                                   KeyScanCursor<byte[]> scanCursor,
+                                                   ScanArgs scanArgs) throws ExecutionException, InterruptedException {
         if (isAsync()) {
             RedisAsyncCommands<byte[], byte[]> async = connect.async();
             RedisFuture<KeyScanCursor<byte[]>> scan = async.scan(scanCursor, scanArgs);

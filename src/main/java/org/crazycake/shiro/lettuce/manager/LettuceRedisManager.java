@@ -5,6 +5,7 @@ import io.lettuce.core.RedisURI;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.support.ConnectionPoolSupport;
+import org.apache.commons.pool2.impl.GenericObjectPool;
 import org.crazycake.shiro.exception.PoolException;
 import org.crazycake.shiro.lettuce.AbstractLettuceRedisManager;
 
@@ -23,7 +24,12 @@ public class LettuceRedisManager extends AbstractLettuceRedisManager<StatefulRed
     /**
      * Redis server port.
      */
-    private int port = 6379;
+    private int port = RedisURI.DEFAULT_REDIS_PORT;
+
+    /**
+     * GenericObjectPool.
+     */
+    private volatile GenericObjectPool<StatefulRedisConnection<byte[], byte[]>> genericObjectPool;
 
     private void initialize() {
         if (genericObjectPool == null) {
