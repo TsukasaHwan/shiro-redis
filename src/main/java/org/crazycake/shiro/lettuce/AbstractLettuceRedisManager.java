@@ -4,15 +4,13 @@ import io.lettuce.core.*;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.lettuce.core.api.sync.RedisCommands;
-import org.apache.commons.pool2.impl.GenericObjectPool;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
-import org.apache.shiro.cache.CacheException;
 import org.crazycake.shiro.IRedisManager;
 
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author Teamo
@@ -129,16 +127,14 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
         }
         byte[] value = null;
         try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
-            if (isAsync()) {
+            if (isAsync) {
                 RedisAsyncCommands<byte[], byte[]> async = connect.async();
                 RedisFuture<byte[]> redisFuture = async.get(key);
-                value = redisFuture.get();
+                value = LettuceFutures.awaitOrCancel(redisFuture, timeout.getSeconds(), TimeUnit.SECONDS);
             } else {
                 RedisCommands<byte[], byte[]> sync = connect.sync();
                 value = sync.get(key);
             }
-        } catch (InterruptedException | ExecutionException e) {
-            throw new CacheException(e);
         }
         return value;
     }
@@ -149,7 +145,7 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
             return null;
         }
         try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
-            if (isAsync()) {
+            if (isAsync) {
                 RedisAsyncCommands<byte[], byte[]> async = connect.async();
                 async.set(key, value);
                 if (expire > 0) {
@@ -169,7 +165,7 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
     @Override
     public void del(byte[] key) {
         try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
-            if (isAsync()) {
+            if (isAsync) {
                 RedisAsyncCommands<byte[], byte[]> async = connect.async();
                 async.del(key);
             } else {
@@ -184,14 +180,12 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
         long dbSize = 0L;
         KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
         scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
-        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(getCount());
+        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
         try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
             while (!scanCursor.isFinished()) {
                 scanCursor = getKeyScanCursor(connect, scanCursor, scanArgs);
                 dbSize += scanCursor.getKeys().size();
             }
-        } catch (ExecutionException | InterruptedException e) {
-            throw new CacheException(e);
         }
         return dbSize;
     }
@@ -201,14 +195,12 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
         Set<byte[]> keys = new HashSet<>();
         KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
         scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
-        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(getCount());
+        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
         try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
             while (!scanCursor.isFinished()) {
                 scanCursor = getKeyScanCursor(connect, scanCursor, scanArgs);
                 keys.addAll(scanCursor.getKeys());
             }
-        } catch (ExecutionException | InterruptedException e) {
-            throw new CacheException(e);
         }
         return keys;
     }
@@ -220,16 +212,13 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
      * @param scanCursor scan cursor
      * @param scanArgs   scan param
      * @return KeyScanCursor
-     * @throws ExecutionException   If the calculation throws an exception
-     * @throws InterruptedException If the current thread is interrupted while waiting
      */
     private KeyScanCursor<byte[]> getKeyScanCursor(final StatefulRedisConnection<byte[], byte[]> connect,
                                                    KeyScanCursor<byte[]> scanCursor,
-                                                   ScanArgs scanArgs) throws ExecutionException, InterruptedException {
-        if (isAsync()) {
+                                                   ScanArgs scanArgs) {
+        if (isAsync) {
             RedisAsyncCommands<byte[], byte[]> async = connect.async();
-            RedisFuture<KeyScanCursor<byte[]>> scan = async.scan(scanCursor, scanArgs);
-            scanCursor = scan.get();
+            scanCursor = LettuceFutures.awaitOrCancel(async.scan(scanCursor, scanArgs), timeout.getSeconds(), TimeUnit.SECONDS);
         } else {
             RedisCommands<byte[], byte[]> sync = connect.sync();
             scanCursor = sync.scan(scanCursor, scanArgs);

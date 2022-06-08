@@ -10,7 +10,6 @@ import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.support.ConnectionPoolSupport;
 import org.apache.commons.pool2.impl.GenericObjectPool;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
-import org.apache.shiro.cache.CacheException;
 import org.crazycake.shiro.IRedisManager;
 import org.crazycake.shiro.exception.PoolException;
 
@@ -19,7 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -127,14 +126,11 @@ public class LettuceRedisClusterManager implements IRedisManager {
         try (StatefulRedisClusterConnection<byte[], byte[]> connection = getStatefulConnection()) {
             if (isAsync) {
                 RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
-                RedisFuture<byte[]> redisFuture = async.get(key);
-                value = redisFuture.get();
+                value = LettuceFutures.awaitOrCancel(async.get(key), timeout.getSeconds(), TimeUnit.SECONDS);
             } else {
                 RedisAdvancedClusterCommands<byte[], byte[]> sync = connection.sync();
                 value = sync.get(key);
             }
-        } catch (ExecutionException | InterruptedException e) {
-            throw new CacheException(e);
         }
         return value;
     }
@@ -186,8 +182,6 @@ public class LettuceRedisClusterManager implements IRedisManager {
                 scanCursor = getKeyScanCursor(connection, scanCursor, scanArgs);
                 dbSize += scanCursor.getKeys().size();
             }
-        } catch (ExecutionException | InterruptedException e) {
-            throw new CacheException(e);
         }
         return dbSize;
     }
@@ -203,8 +197,6 @@ public class LettuceRedisClusterManager implements IRedisManager {
                 scanCursor = getKeyScanCursor(connection, scanCursor, scanArgs);
                 keys.addAll(scanCursor.getKeys());
             }
-        } catch (ExecutionException | InterruptedException e) {
-            throw new CacheException(e);
         }
         return keys;
     }
@@ -216,16 +208,13 @@ public class LettuceRedisClusterManager implements IRedisManager {
      * @param scanCursor scan cursor
      * @param scanArgs   scan param
      * @return KeyScanCursor
-     * @throws ExecutionException   If the calculation throws an exception
-     * @throws InterruptedException If the current thread is interrupted while waiting
      */
     private KeyScanCursor<byte[]> getKeyScanCursor(final StatefulRedisClusterConnection<byte[], byte[]> connection,
                                                    KeyScanCursor<byte[]> scanCursor,
-                                                   ScanArgs scanArgs) throws ExecutionException, InterruptedException {
+                                                   ScanArgs scanArgs) {
         if (isAsync) {
             RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
-            RedisFuture<KeyScanCursor<byte[]>> scan = async.scan(scanCursor, scanArgs);
-            scanCursor = scan.get();
+            scanCursor = LettuceFutures.awaitOrCancel(async.scan(scanCursor, scanArgs), timeout.getSeconds(), TimeUnit.SECONDS);
         } else {
             RedisAdvancedClusterCommands<byte[], byte[]> sync = connection.sync();
             scanCursor = sync.scan(scanCursor, scanArgs);
