@@ -6,6 +6,8 @@ import io.protostuff.Schema;
 import io.protostuff.runtime.RuntimeSchema;
 import org.crazycake.shiro.exception.SerializationException;
 
+import java.util.Objects;
+
 /**
  * @author Teamo
  * @date 2022/05/31
@@ -28,19 +30,27 @@ public class ProtostuffSerializer implements RedisSerializer<Object> {
 
     @Override
     public byte[] serialize(Object o) throws SerializationException {
+        byte[] result = new byte[0];
+
+        if (o == null) {
+            return result;
+        }
+
         SerializeDeserializeWrapper<Object> builder = SerializeDeserializeWrapper.builder(o);
-        byte[] data;
         try {
-            data = ProtostuffIOUtil.toByteArray(builder, WRAPPER_SCHEMA, BUFFER);
+            result = ProtostuffIOUtil.toByteArray(builder, WRAPPER_SCHEMA, BUFFER);
         } finally {
             BUFFER.clear();
         }
-        return data;
+        return result;
     }
 
     @Override
     public Object deserialize(byte[] bytes) throws SerializationException {
         SerializeDeserializeWrapper<Object> wrapper = new SerializeDeserializeWrapper<>();
+        if (bytes == null || bytes.length == 0) {
+            return null;
+        }
         ProtostuffIOUtil.mergeFrom(bytes, wrapper, WRAPPER_SCHEMA);
         return wrapper.getData();
     }
@@ -59,7 +69,7 @@ public class ProtostuffSerializer implements RedisSerializer<Object> {
      * @author Teamo
      * @date 2022/05/31
      */
-    public static class SerializeDeserializeWrapper<T> {
+    private static class SerializeDeserializeWrapper<T> {
         private T data;
 
         public static <T> SerializeDeserializeWrapper<T> builder(T data) {
