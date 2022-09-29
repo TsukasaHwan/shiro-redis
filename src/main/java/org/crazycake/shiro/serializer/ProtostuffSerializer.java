@@ -49,10 +49,10 @@ public class ProtostuffSerializer implements RedisSerializer<Object> {
 
     @Override
     public Object deserialize(byte[] bytes) throws SerializationException {
-        SerializeDeserializeWrapper<Object> wrapper = new SerializeDeserializeWrapper<>();
         if (bytes == null || bytes.length == 0) {
             return null;
         }
+        SerializeDeserializeWrapper<Object> wrapper = new SerializeDeserializeWrapper<>();
         ProtostuffIOUtil.mergeFrom(bytes, wrapper, WRAPPER_SCHEMA);
         return wrapper.getData();
     }
