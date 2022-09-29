@@ -23,13 +23,13 @@ public class ObjectSerializer implements RedisSerializer<Object> {
         ByteArrayOutputStream byteStream = new ByteArrayOutputStream(BYTE_ARRAY_OUTPUT_STREAM_SIZE);
         if (!(object instanceof Serializable)) {
             throw new SerializationException("requires a Serializable payload "
-                    + "but received an object of type [" + object.getClass().getName() + "]");
+                                             + "but received an object of type [" + object.getClass().getName() + "]");
         }
         try {
             ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteStream);
             objectOutputStream.writeObject(object);
             objectOutputStream.flush();
-            result =  byteStream.toByteArray();
+            result = byteStream.toByteArray();
         } catch (IOException e) {
             throw new SerializationException("serialize error, object=" + object, e);
         }
@@ -39,19 +39,15 @@ public class ObjectSerializer implements RedisSerializer<Object> {
 
     @Override
     public Object deserialize(byte[] bytes) throws SerializationException {
-        Object result = null;
-
         if (bytes == null || bytes.length == 0) {
-            return result;
+            return null;
         }
-
+        Object result = null;
         try {
             ByteArrayInputStream byteStream = new ByteArrayInputStream(bytes);
             ObjectInputStream objectInputStream = new MultiClassLoaderObjectInputStream(byteStream);
             result = objectInputStream.readObject();
-        } catch (IOException e) {
-            throw new SerializationException("deserialize error", e);
-        } catch (ClassNotFoundException e) {
+        } catch (IOException | ClassNotFoundException e) {
             throw new SerializationException("deserialize error", e);
         }
 

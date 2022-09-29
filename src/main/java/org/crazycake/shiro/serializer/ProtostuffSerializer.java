@@ -21,11 +21,13 @@ public class ProtostuffSerializer implements RedisSerializer<Object> {
     /**
      * Serialize/deserialize wrapper class Class objects
      */
+    @SuppressWarnings("rawtypes")
     private static final Class<SerializeDeserializeWrapper> WRAPPER_CLASS = SerializeDeserializeWrapper.class;
 
     /**
      * Serialize/deserialize wrapper class Schema objects
      */
+    @SuppressWarnings("rawtypes")
     private static final Schema<SerializeDeserializeWrapper> WRAPPER_SCHEMA = RuntimeSchema.createFrom(WRAPPER_CLASS);
 
     @Override

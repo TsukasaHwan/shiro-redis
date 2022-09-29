@@ -8,6 +8,7 @@ import io.lettuce.core.masterreplica.MasterReplica;
 import io.lettuce.core.masterreplica.StatefulRedisMasterReplicaConnection;
 import io.lettuce.core.support.ConnectionPoolSupport;
 import org.apache.commons.pool2.impl.GenericObjectPool;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.crazycake.shiro.exception.PoolException;
 import org.crazycake.shiro.lettuce.AbstractLettuceRedisManager;
 
@@ -18,8 +19,7 @@ import java.util.Objects;
  * @author Teamo
  * @date 2022/05/19
  */
-public class LettuceRedisSentinelManager
-        extends AbstractLettuceRedisManager<StatefulRedisMasterReplicaConnection<byte[], byte[]>> {
+public class LettuceRedisSentinelManager extends AbstractLettuceRedisManager {
     private static final String DEFAULT_MASTER_NAME = "mymaster";
 
     private String masterName = DEFAULT_MASTER_NAME;
@@ -35,6 +35,7 @@ public class LettuceRedisSentinelManager
      */
     private volatile GenericObjectPool<StatefulRedisMasterReplicaConnection<byte[], byte[]>> genericObjectPool;
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void initialize() {
         if (genericObjectPool == null) {
             synchronized (LettuceRedisSentinelManager.class) {
@@ -44,7 +45,8 @@ public class LettuceRedisSentinelManager
                     redisClient.setOptions(getClientOptions());
                     StatefulRedisMasterReplicaConnection<byte[], byte[]> connect = MasterReplica.connect(redisClient, new ByteArrayCodec(), redisURI);
                     connect.setReadFrom(readFrom);
-                    genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> connect, getGenericObjectPoolConfig());
+                    GenericObjectPoolConfig genericObjectPoolConfig = getGenericObjectPoolConfig();
+                    genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> connect, genericObjectPoolConfig);
                 }
             }
         }

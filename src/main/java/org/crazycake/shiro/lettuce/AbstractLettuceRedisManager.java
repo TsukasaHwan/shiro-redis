@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
  * @author Teamo
  * @date 2022/05/19
  */
-public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnection<byte[], byte[]>> implements IRedisManager {
+public abstract class AbstractLettuceRedisManager implements IRedisManager {
     /**
      * Default value of count.
      */
@@ -55,14 +55,16 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
     /**
      * genericObjectPoolConfig used to initialize GenericObjectPoolConfig object.
      */
-    private GenericObjectPoolConfig<T> genericObjectPoolConfig = new GenericObjectPoolConfig<>();
+    @SuppressWarnings("rawtypes")
+    private GenericObjectPoolConfig genericObjectPoolConfig = new GenericObjectPoolConfig<>();
 
     /**
      * Get a stateful connection.
      *
      * @return T
      */
-    protected abstract T getStatefulConnection();
+    @SuppressWarnings("rawtypes")
+    protected abstract StatefulRedisConnection getStatefulConnection();
 
     public Duration getTimeout() {
         return timeout;
@@ -112,15 +114,16 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
         this.clientOptions = clientOptions;
     }
 
-    public GenericObjectPoolConfig<T> getGenericObjectPoolConfig() {
+    public GenericObjectPoolConfig<?> getGenericObjectPoolConfig() {
         return genericObjectPoolConfig;
     }
 
-    public void setGenericObjectPoolConfig(GenericObjectPoolConfig<T> genericObjectPoolConfig) {
+    public void setGenericObjectPoolConfig(GenericObjectPoolConfig<?> genericObjectPoolConfig) {
         this.genericObjectPoolConfig = genericObjectPoolConfig;
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public byte[] get(byte[] key) {
         if (key == null) {
             return null;
@@ -140,6 +143,7 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
     }
 
     @Override
+    @SuppressWarnings({"unchecked"})
     public byte[] set(byte[] key, byte[] value, int expire) {
         if (key == null) {
             return null;
@@ -163,6 +167,7 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void del(byte[] key) {
         try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
             if (isAsync) {
@@ -176,6 +181,7 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public Long dbSize(byte[] pattern) {
         long dbSize = 0L;
         KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
@@ -191,6 +197,7 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public Set<byte[]> keys(byte[] pattern) {
         Set<byte[]> keys = new HashSet<>();
         KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();

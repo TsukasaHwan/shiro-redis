@@ -6,6 +6,7 @@ import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.support.ConnectionPoolSupport;
 import org.apache.commons.pool2.impl.GenericObjectPool;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.crazycake.shiro.exception.PoolException;
 import org.crazycake.shiro.lettuce.AbstractLettuceRedisManager;
 
@@ -15,7 +16,7 @@ import org.crazycake.shiro.lettuce.AbstractLettuceRedisManager;
  * @author Teamo
  * @date 2022/05/18
  */
-public class LettuceRedisManager extends AbstractLettuceRedisManager<StatefulRedisConnection<byte[], byte[]>> {
+public class LettuceRedisManager extends AbstractLettuceRedisManager {
     /**
      * Redis server host.
      */
@@ -31,13 +32,15 @@ public class LettuceRedisManager extends AbstractLettuceRedisManager<StatefulRed
      */
     private volatile GenericObjectPool<StatefulRedisConnection<byte[], byte[]>> genericObjectPool;
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void initialize() {
         if (genericObjectPool == null) {
             synchronized (LettuceRedisManager.class) {
                 if (genericObjectPool == null) {
                     RedisClient redisClient = RedisClient.create(createRedisURI());
                     redisClient.setOptions(getClientOptions());
-                    genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> redisClient.connect(new ByteArrayCodec()), getGenericObjectPoolConfig());
+                    GenericObjectPoolConfig genericObjectPoolConfig = getGenericObjectPoolConfig();
+                    genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> redisClient.connect(new ByteArrayCodec()), genericObjectPoolConfig);
                 }
             }
         }

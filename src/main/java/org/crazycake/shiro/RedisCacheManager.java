@@ -12,88 +12,99 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+/**
+ * @author Alexxiyang
+ */
 public class RedisCacheManager implements CacheManager {
 
-	private final Logger logger = LoggerFactory.getLogger(RedisCacheManager.class);
+    private static final Logger logger = LoggerFactory.getLogger(RedisCacheManager.class);
 
-	// fast lookup by name map
-	private final ConcurrentMap<String, Cache> caches = new ConcurrentHashMap<>();
-	private RedisSerializer keySerializer = new StringSerializer();
-	private RedisSerializer valueSerializer = new ObjectSerializer();
+    /**
+     * fast lookup by name map
+     */
+    @SuppressWarnings("rawtypes")
+    private final ConcurrentMap<String, Cache> caches = new ConcurrentHashMap<>();
+    @SuppressWarnings("rawtypes")
+    private RedisSerializer keySerializer = new StringSerializer();
+    @SuppressWarnings("rawtypes")
+    private RedisSerializer valueSerializer = new ObjectSerializer();
 
-	private IRedisManager redisManager;
+    private IRedisManager redisManager;
 
-	// expire time in seconds
-	public static final int DEFAULT_EXPIRE = 1800;
-	private int expire = DEFAULT_EXPIRE;
+    /**
+     * expire time in seconds
+     */
+    public static final int DEFAULT_EXPIRE = 1800;
+    private int expire = DEFAULT_EXPIRE;
 
-	/**
-	 * The Redis key prefix for caches
-	 */
-	public static final String DEFAULT_CACHE_KEY_PREFIX = "shiro:cache:";
-	private String keyPrefix = DEFAULT_CACHE_KEY_PREFIX;
+    /**
+     * The Redis key prefix for caches
+     */
+    public static final String DEFAULT_CACHE_KEY_PREFIX = "shiro:cache:";
+    private String keyPrefix = DEFAULT_CACHE_KEY_PREFIX;
 
-	public static final String DEFAULT_PRINCIPAL_ID_FIELD_NAME = "id";
-	private String principalIdFieldName = DEFAULT_PRINCIPAL_ID_FIELD_NAME;
+    public static final String DEFAULT_PRINCIPAL_ID_FIELD_NAME = "id";
+    private String principalIdFieldName = DEFAULT_PRINCIPAL_ID_FIELD_NAME;
 
-	@Override
-	public <K, V> Cache<K, V> getCache(String name) throws CacheException {
-		logger.debug("get cache, name=" + name);
+    @Override
+    @SuppressWarnings("unchecked")
+    public <K, V> Cache<K, V> getCache(String name) throws CacheException {
+        logger.debug("get cache, name=" + name);
 
-		Cache<K, V> cache = caches.get(name);
+        Cache<K, V> cache = caches.get(name);
 
-		if (cache == null) {
-			cache = new RedisCache<K, V>(redisManager, keySerializer, valueSerializer, keyPrefix + name + ":", expire, principalIdFieldName);
-			caches.put(name, cache);
-		}
-		return cache;
-	}
+        if (cache == null) {
+            cache = new RedisCache<>(redisManager, keySerializer, valueSerializer, keyPrefix + name + ":", expire, principalIdFieldName);
+            caches.put(name, cache);
+        }
+        return cache;
+    }
 
-	public IRedisManager getRedisManager() {
-		return redisManager;
-	}
+    public IRedisManager getRedisManager() {
+        return redisManager;
+    }
 
-	public void setRedisManager(IRedisManager redisManager) {
-		this.redisManager = redisManager;
-	}
+    public void setRedisManager(IRedisManager redisManager) {
+        this.redisManager = redisManager;
+    }
 
-	public String getKeyPrefix() {
-		return keyPrefix;
-	}
+    public String getKeyPrefix() {
+        return keyPrefix;
+    }
 
-	public void setKeyPrefix(String keyPrefix) {
-		this.keyPrefix = keyPrefix;
-	}
+    public void setKeyPrefix(String keyPrefix) {
+        this.keyPrefix = keyPrefix;
+    }
 
-	public RedisSerializer getKeySerializer() {
-		return keySerializer;
-	}
+    public RedisSerializer<?> getKeySerializer() {
+        return keySerializer;
+    }
 
-	public void setKeySerializer(RedisSerializer keySerializer) {
-		this.keySerializer = keySerializer;
-	}
+    public void setKeySerializer(RedisSerializer<?> keySerializer) {
+        this.keySerializer = keySerializer;
+    }
 
-	public RedisSerializer getValueSerializer() {
-		return valueSerializer;
-	}
+    public RedisSerializer<?> getValueSerializer() {
+        return valueSerializer;
+    }
 
-	public void setValueSerializer(RedisSerializer valueSerializer) {
-		this.valueSerializer = valueSerializer;
-	}
+    public void setValueSerializer(RedisSerializer<?> valueSerializer) {
+        this.valueSerializer = valueSerializer;
+    }
 
-	public int getExpire() {
-		return expire;
-	}
+    public int getExpire() {
+        return expire;
+    }
 
-	public void setExpire(int expire) {
-		this.expire = expire;
-	}
+    public void setExpire(int expire) {
+        this.expire = expire;
+    }
 
-	public String getPrincipalIdFieldName() {
-		return principalIdFieldName;
-	}
+    public String getPrincipalIdFieldName() {
+        return principalIdFieldName;
+    }
 
-	public void setPrincipalIdFieldName(String principalIdFieldName) {
-		this.principalIdFieldName = principalIdFieldName;
-	}
+    public void setPrincipalIdFieldName(String principalIdFieldName) {
+        this.principalIdFieldName = principalIdFieldName;
+    }
 }
