@@ -172,14 +172,14 @@ public class RedisCache<K, V> implements Cache<K, V> {
         if (principalObject instanceof String) {
             return principalObject.toString();
         }
-        Method pincipalIdGetter = getPrincipalIdGetter(principalObject);
-        return getIdObj(principalObject, pincipalIdGetter);
+        Method principalIdGetter = getPrincipalIdGetter(principalObject);
+        return getIdObj(principalObject, principalIdGetter);
     }
 
-    private String getIdObj(Object principalObject, Method pincipalIdGetter) {
+    private String getIdObj(Object principalObject, Method principalIdGetter) {
         String redisKey;
         try {
-            Object idObj = pincipalIdGetter.invoke(principalObject);
+            Object idObj = principalIdGetter.invoke(principalObject);
             if (idObj == null) {
                 throw new PrincipalIdNullException(principalObject.getClass(), this.principalIdFieldName);
             }
@@ -191,14 +191,14 @@ public class RedisCache<K, V> implements Cache<K, V> {
     }
 
     private Method getPrincipalIdGetter(Object principalObject) {
-        Method pincipalIdGetter = null;
+        Method principalIdGetter = null;
         String principalIdMethodName = this.getPrincipalIdMethodName();
         try {
-            pincipalIdGetter = principalObject.getClass().getMethod(principalIdMethodName);
+            principalIdGetter = principalObject.getClass().getMethod(principalIdMethodName);
         } catch (NoSuchMethodException e) {
             throw new PrincipalInstanceException(principalObject.getClass(), this.principalIdFieldName);
         }
-        return pincipalIdGetter;
+        return principalIdGetter;
     }
 
     private String getPrincipalIdMethodName() {

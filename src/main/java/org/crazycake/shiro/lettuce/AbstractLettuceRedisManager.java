@@ -151,15 +151,17 @@ public abstract class AbstractLettuceRedisManager implements IRedisManager {
         try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
             if (isAsync) {
                 RedisAsyncCommands<byte[], byte[]> async = connect.async();
-                async.set(key, value);
                 if (expire > 0) {
-                    async.expire(key, expire);
+                    async.set(key, value, SetArgs.Builder.ex(expire));
+                } else {
+                    async.set(key, value);
                 }
             } else {
                 RedisCommands<byte[], byte[]> sync = connect.sync();
-                sync.set(key, value);
                 if (expire > 0) {
-                    sync.expire(key, expire);
+                    sync.set(key, value, SetArgs.Builder.ex(expire));
+                } else {
+                    sync.set(key, value);
                 }
             }
         }

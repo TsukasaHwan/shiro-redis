@@ -143,15 +143,17 @@ public class LettuceRedisClusterManager implements IRedisManager {
         try (StatefulRedisClusterConnection<byte[], byte[]> connection = getStatefulConnection()) {
             if (isAsync) {
                 RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
-                async.set(key, value);
                 if (expire > 0) {
-                    async.expire(key, expire);
+                    async.set(key, value, SetArgs.Builder.ex(expire));
+                } else {
+                    async.set(key, value);
                 }
             } else {
                 RedisAdvancedClusterCommands<byte[], byte[]> sync = connection.sync();
-                sync.set(key, value);
                 if (expire > 0) {
-                    sync.expire(key, expire);
+                    sync.set(key, value, SetArgs.Builder.ex(expire));
+                } else {
+                    sync.set(key, value);
                 }
             }
         }
