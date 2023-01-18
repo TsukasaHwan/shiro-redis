@@ -43,7 +43,7 @@ public class RedisSentinelManager extends WorkAloneRedisManager implements IRedi
             synchronized (RedisSentinelManager.class) {
                 if (jedisPool == null) {
                     String[] sentinelHosts = host.split(",\\s*");
-                    Set<String> sentinels = new HashSet<String>();
+                    Set<String> sentinels = new HashSet<>();
                     Collections.addAll(sentinels, sentinelHosts);
                     jedisPool = new JedisSentinelPool(masterName, sentinels, getJedisPoolConfig(), timeout, soTimeout, password, database);
                 }
