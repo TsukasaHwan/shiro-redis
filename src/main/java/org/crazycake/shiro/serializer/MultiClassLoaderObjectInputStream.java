@@ -1,8 +1,5 @@
 package org.crazycake.shiro.serializer;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
@@ -14,10 +11,9 @@ import java.io.ObjectStreamClass;
  * @author Alexy Yang
  */
 public class MultiClassLoaderObjectInputStream extends ObjectInputStream {
-    private static final Logger logger = LoggerFactory.getLogger(MultiClassLoaderObjectInputStream.class);
 
-    MultiClassLoaderObjectInputStream(InputStream str) throws IOException {
-        super(str);
+    MultiClassLoaderObjectInputStream(InputStream is) throws IOException {
+        super(is);
     }
 
     /**
@@ -36,27 +32,18 @@ public class MultiClassLoaderObjectInputStream extends ObjectInputStream {
         String name = desc.getName();
 
         try {
-            ClassLoader cl = Thread.currentThread().getContextClassLoader();
-            return Class.forName(name, false, cl);
-        } catch (Throwable ex) {
-            logger.debug("Cannot access thread context ClassLoader!", ex);
+            return super.resolveClass(desc);
+        } catch (ClassNotFoundException ex) {
+            try {
+                return Class.forName(name, false, Thread.currentThread().getContextClassLoader());
+            } catch (ClassNotFoundException e) {
+                try {
+                    return Class.forName(name, false, MultiClassLoaderObjectInputStream.class.getClassLoader());
+                } catch (ClassNotFoundException exc) {
+                    return Class.forName(name, false, ClassLoader.getSystemClassLoader());
+                }
+            }
         }
-
-        try {
-            ClassLoader cl = MultiClassLoaderObjectInputStream.class.getClassLoader();
-            return Class.forName(name, false, cl);
-        } catch (Throwable ex) {
-            logger.debug("Cannot access application ClassLoader", ex);
-        }
-
-        try {
-            ClassLoader cl = ClassLoader.getSystemClassLoader();
-            return Class.forName(name, false, cl);
-        } catch (Throwable ex) {
-            logger.debug("Cannot access system ClassLoader", ex);
-        }
-
-        return super.resolveClass(desc);
     }
 
 }
