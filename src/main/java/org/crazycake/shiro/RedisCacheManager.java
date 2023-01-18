@@ -1,5 +1,6 @@
 package org.crazycake.shiro;
 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.shiro.cache.Cache;
 import org.apache.shiro.cache.CacheException;
 import org.apache.shiro.cache.CacheManager;
@@ -9,11 +10,10 @@ import org.crazycake.shiro.serializer.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-
 /**
- * @author Alexxiyang
+ * RedisCacheManager
+ *
+ * @author Alexxiyang, Teamo
  */
 public class RedisCacheManager implements CacheManager {
 
@@ -23,7 +23,7 @@ public class RedisCacheManager implements CacheManager {
      * fast lookup by name map
      */
     @SuppressWarnings("rawtypes")
-    private final ConcurrentMap<String, Cache> caches = new ConcurrentHashMap<>();
+    private final com.github.benmanes.caffeine.cache.Cache<String, Cache> caches = Caffeine.newBuilder().build();
     @SuppressWarnings("rawtypes")
     private RedisSerializer keySerializer = new StringSerializer();
     @SuppressWarnings("rawtypes")
@@ -51,13 +51,7 @@ public class RedisCacheManager implements CacheManager {
     public <K, V> Cache<K, V> getCache(String name) throws CacheException {
         logger.debug("get cache, name=" + name);
 
-        Cache<K, V> cache = caches.get(name);
-
-        if (cache == null) {
-            cache = new RedisCache<>(redisManager, keySerializer, valueSerializer, keyPrefix + name + ":", expire, principalIdFieldName);
-            caches.put(name, cache);
-        }
-        return cache;
+        return (Cache<K, V>) caches.get(name, key -> new RedisCache<>(redisManager, keySerializer, valueSerializer, keyPrefix + name + ":", expire, principalIdFieldName));
     }
 
     public IRedisManager getRedisManager() {

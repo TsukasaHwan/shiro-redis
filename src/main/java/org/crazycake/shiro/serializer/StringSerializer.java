@@ -4,12 +4,15 @@ import org.crazycake.shiro.exception.SerializationException;
 
 import java.io.UnsupportedEncodingException;
 
+/**
+ * @author Alexy Yang
+ */
 public class StringSerializer implements RedisSerializer<String> {
 
     private static final String DEFAULT_CHARSET = "UTF-8";
 
     /**
-     * Refer to https://docs.oracle.com/javase/8/docs/technotes/guides/intl/encoding.doc.html
+     * Refer to <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/intl/encoding.doc.html"/>
      * UTF-8, UTF-16, UTF-32, ISO-8859-1, GBK, Big5, etc
      */
     private String charset = DEFAULT_CHARSET;

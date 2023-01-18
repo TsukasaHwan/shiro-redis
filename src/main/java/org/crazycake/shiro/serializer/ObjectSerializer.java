@@ -9,6 +9,9 @@ import java.io.Serializable;
 
 import org.crazycake.shiro.exception.SerializationException;
 
+/**
+ * @author Alexy Yang
+ */
 public class ObjectSerializer implements RedisSerializer<Object> {
 
     public static final int BYTE_ARRAY_OUTPUT_STREAM_SIZE = 128;

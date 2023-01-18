@@ -20,8 +20,7 @@ import java.util.*;
 /**
  * Used for setting/getting authorization information from Redis
  *
- * @param <K>
- * @param <V>
+ * @author Alexy Yang
  */
 public class RedisCache<K, V> implements Cache<K, V> {
 
@@ -37,6 +36,8 @@ public class RedisCache<K, V> implements Cache<K, V> {
     private String principalIdFieldName = RedisCacheManager.DEFAULT_PRINCIPAL_ID_FIELD_NAME;
 
     /**
+     * Construction method
+     *
      * @param redisManager         redisManager
      * @param keySerializer        keySerializer
      * @param valueSerializer      valueSerializer
