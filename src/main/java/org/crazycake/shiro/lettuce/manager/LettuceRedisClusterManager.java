@@ -5,7 +5,11 @@ import io.lettuce.core.cluster.ClusterClientOptions;
 import io.lettuce.core.cluster.RedisClusterClient;
 import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
 import io.lettuce.core.cluster.api.async.RedisAdvancedClusterAsyncCommands;
+import io.lettuce.core.cluster.api.async.RedisClusterAsyncCommands;
 import io.lettuce.core.cluster.api.sync.RedisAdvancedClusterCommands;
+import io.lettuce.core.cluster.api.sync.RedisClusterCommands;
+import io.lettuce.core.cluster.models.partitions.ClusterPartitionParser;
+import io.lettuce.core.cluster.models.partitions.Partitions;
 import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.support.ConnectionPoolSupport;
 import org.apache.commons.pool2.impl.GenericObjectPool;
@@ -19,6 +23,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 /**
@@ -107,7 +112,7 @@ public class LettuceRedisClusterManager implements IRedisManager {
             String[] hostAndPort = node.split(":");
             RedisURI.Builder builder = RedisURI.builder()
                     .withHost(hostAndPort[0])
-                    .withPort(Integer.parseInt(hostAndPort[0]))
+                    .withPort(Integer.parseInt(hostAndPort[1]))
                     .withDatabase(database)
                     .withTimeout(timeout);
             if (password != null) {
@@ -175,53 +180,82 @@ public class LettuceRedisClusterManager implements IRedisManager {
 
     @Override
     public Long dbSize(byte[] pattern) {
-        long dbSize = 0L;
-        KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
-        scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
-        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
+        AtomicLong dbSize = new AtomicLong(0L);
+
         try (StatefulRedisClusterConnection<byte[], byte[]> connection = getStatefulConnection()) {
-            while (!scanCursor.isFinished()) {
-                scanCursor = getKeyScanCursor(connection, scanCursor, scanArgs);
-                dbSize += scanCursor.getKeys().size();
+            if (isAsync) {
+                RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
+                Partitions parse = ClusterPartitionParser.parse(LettuceFutures.awaitOrCancel(async.clusterNodes(), timeout.getSeconds(), TimeUnit.SECONDS));
+
+                parse.forEach(redisClusterNode -> {
+                    RedisClusterAsyncCommands<byte[], byte[]> clusterAsyncCommands = async.getConnection(redisClusterNode.getNodeId());
+
+                    KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
+                    scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
+                    ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
+                    while (!scanCursor.isFinished()) {
+                        scanCursor = LettuceFutures.awaitOrCancel(clusterAsyncCommands.scan(scanCursor, scanArgs), timeout.getSeconds(), TimeUnit.SECONDS);
+                        dbSize.addAndGet(scanCursor.getKeys().size());
+                    }
+                });
+            } else {
+                RedisAdvancedClusterCommands<byte[], byte[]> sync = connection.sync();
+                Partitions parse = ClusterPartitionParser.parse(sync.clusterNodes());
+
+                parse.forEach(redisClusterNode -> {
+                    RedisClusterCommands<byte[], byte[]> clusterCommands = sync.getConnection(redisClusterNode.getNodeId());
+
+                    KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
+                    scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
+                    ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
+                    while (!scanCursor.isFinished()) {
+                        scanCursor = clusterCommands.scan(scanCursor, scanArgs);
+                        dbSize.addAndGet(scanCursor.getKeys().size());
+                    }
+                });
             }
         }
-        return dbSize;
+        return dbSize.get();
     }
 
     @Override
     public Set<byte[]> keys(byte[] pattern) {
         Set<byte[]> keys = new HashSet<>();
-        KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
-        scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
-        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
+
         try (StatefulRedisClusterConnection<byte[], byte[]> connection = getStatefulConnection()) {
-            while (!scanCursor.isFinished()) {
-                scanCursor = getKeyScanCursor(connection, scanCursor, scanArgs);
-                keys.addAll(scanCursor.getKeys());
+            if (isAsync) {
+                RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
+                Partitions parse = ClusterPartitionParser.parse(LettuceFutures.awaitOrCancel(async.clusterNodes(), timeout.getSeconds(), TimeUnit.SECONDS));
+
+                parse.forEach(redisClusterNode -> {
+                    RedisClusterAsyncCommands<byte[], byte[]> clusterAsyncCommands = async.getConnection(redisClusterNode.getNodeId());
+
+                    KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
+                    scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
+                    ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
+                    while (!scanCursor.isFinished()) {
+                        scanCursor = LettuceFutures.awaitOrCancel(clusterAsyncCommands.scan(scanCursor, scanArgs), timeout.getSeconds(), TimeUnit.SECONDS);
+                        keys.addAll(scanCursor.getKeys());
+                    }
+                });
+            } else {
+                RedisAdvancedClusterCommands<byte[], byte[]> sync = connection.sync();
+                Partitions parse = ClusterPartitionParser.parse(sync.clusterNodes());
+
+                parse.forEach(redisClusterNode -> {
+                    RedisClusterCommands<byte[], byte[]> clusterCommands = sync.getConnection(redisClusterNode.getNodeId());
+
+                    KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
+                    scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
+                    ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
+                    while (!scanCursor.isFinished()) {
+                        scanCursor = clusterCommands.scan(scanCursor, scanArgs);
+                        keys.addAll(scanCursor.getKeys());
+                    }
+                });
             }
         }
         return keys;
-    }
-
-    /**
-     * get scan cursor result
-     *
-     * @param connection connection
-     * @param scanCursor scan cursor
-     * @param scanArgs   scan param
-     * @return KeyScanCursor
-     */
-    private KeyScanCursor<byte[]> getKeyScanCursor(final StatefulRedisClusterConnection<byte[], byte[]> connection,
-                                                   KeyScanCursor<byte[]> scanCursor,
-                                                   ScanArgs scanArgs) {
-        if (isAsync) {
-            RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
-            scanCursor = LettuceFutures.awaitOrCancel(async.scan(scanCursor, scanArgs), timeout.getSeconds(), TimeUnit.SECONDS);
-        } else {
-            RedisAdvancedClusterCommands<byte[], byte[]> sync = connection.sync();
-            scanCursor = sync.scan(scanCursor, scanArgs);
-        }
-        return scanCursor;
     }
 
     public List<String> getNodes() {

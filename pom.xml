@@ -15,6 +15,11 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <shiro>1.11.0</shiro>
+        <slf4j-api>1.7.36</slf4j-api>
+        <jedis>4.3.1</jedis>
+        <lettuce>6.2.2.RELEASE</lettuce>
+        <caffeine>2.9.3</caffeine>
     </properties>
 
     <licenses>
@@ -25,36 +30,47 @@
         </license>
     </licenses>
 
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.apache.shiro</groupId>
+                <artifactId>shiro-core</artifactId>
+                <version>${shiro}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>1.7.36</version>
+            <version>${slf4j-api}</version>
         </dependency>
 
         <dependency>
             <groupId>org.apache.shiro</groupId>
             <artifactId>shiro-core</artifactId>
-            <version>1.11.0</version>
         </dependency>
 
         <dependency>
             <groupId>redis.clients</groupId>
             <artifactId>jedis</artifactId>
-            <version>4.3.1</version>
+            <version>${jedis}</version>
+            <optional>true</optional>
         </dependency>
 
         <dependency>
             <groupId>io.lettuce</groupId>
             <artifactId>lettuce-core</artifactId>
-            <version>6.2.2.RELEASE</version>
+            <version>${lettuce}</version>
+            <optional>true</optional>
         </dependency>
 
         <!-- memory cache -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
-            <version>2.9.3</version>
+            <version>${caffeine}</version>
         </dependency>
 
         <!-- Test -->

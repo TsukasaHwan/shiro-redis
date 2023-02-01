@@ -18,10 +18,14 @@ public class RedisSentinelManager extends WorkAloneRedisManager implements IRedi
     private static final String DEFAULT_MASTER_NAME = "mymaster";
     private String masterName = DEFAULT_MASTER_NAME;
 
-    // timeout for jedis try to connect to redis server, not expire time! In milliseconds
+    /**
+     * timeout for jedis try to connect to redis server, not expire time! In milliseconds
+     */
     private int timeout = Protocol.DEFAULT_TIMEOUT;
 
-    // timeout for jedis try to read data from redis server
+    /**
+     * timeout for jedis try to read data from redis server
+     */
     private int soTimeout = Protocol.DEFAULT_TIMEOUT;
 
     private String password;

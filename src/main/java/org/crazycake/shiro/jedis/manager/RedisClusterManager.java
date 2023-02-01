@@ -17,10 +17,14 @@ public class RedisClusterManager implements IRedisManager {
     private static final String DEFAULT_HOST = "127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002";
     private String host = DEFAULT_HOST;
 
-    // timeout for jedis try to connect to redis server, not expire time! In milliseconds
+    /**
+     * timeout for jedis try to connect to redis server, not expire time! In milliseconds
+     */
     private int timeout = Protocol.DEFAULT_TIMEOUT;
 
-    // timeout for jedis try to read data from redis server
+    /**
+     * timeout for jedis try to read data from redis server
+     */
     private int soTimeout = Protocol.DEFAULT_TIMEOUT;
 
     private String password;
@@ -157,7 +161,7 @@ public class RedisClusterManager implements IRedisManager {
                 commandArguments = new CommandArguments(Protocol.Command.SCAN).add(cursor).addParams(params);
                 commandObject = new CommandObject<>(commandArguments, BuilderFactory.SCAN_BINARY_RESPONSE);
                 scanResult = connection.executeCommand(commandObject);
-                dbSize++;
+                dbSize += scanResult.getResult().size();
                 cursor = scanResult.getCursorAsBytes();
             } while (scanResult.getCursor().compareTo(ScanParams.SCAN_POINTER_START) > 0);
         }

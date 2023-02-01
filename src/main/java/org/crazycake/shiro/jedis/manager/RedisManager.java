@@ -11,7 +11,9 @@ public class RedisManager extends WorkAloneRedisManager implements IRedisManager
     private static final String DEFAULT_HOST = "127.0.0.1:6379";
     private String host = DEFAULT_HOST;
 
-    // timeout for jedis try to connect to redis server, not expire time! In milliseconds
+    /**
+     * timeout for jedis try to connect to redis server, not expire time! In milliseconds
+     */
     private int timeout = Protocol.DEFAULT_TIMEOUT;
 
     private String password;
