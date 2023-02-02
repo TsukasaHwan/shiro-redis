@@ -14,11 +14,9 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.CoreMatchers.*;
+import static org.mockito.Mockito.*;
 
 public class RedisSessionDAOTest {
     private IRedisManager redisManager;
@@ -37,6 +35,7 @@ public class RedisSessionDAOTest {
         }
         redisSessionDAO.setKeyPrefix("student:");
         redisSessionDAO.setRedisManager(redisManager);
+        redisSessionDAO.setSessionInMemoryTimeout(3000L);
         return redisSessionDAO;
     }
 
@@ -49,11 +48,12 @@ public class RedisSessionDAOTest {
     }
 
     @Test
-    public void testUpdateByCustomExpire() throws SerializationException {
+    public void testUpdateByCustomExpire() throws SerializationException, InterruptedException {
         RedisSessionDAO sessionDAO = mountRedisSessionDAO(3);
         StudentSession session = new StudentSession(98, 2000);
         sessionDAO.update(session);
         verify(redisManager).set(keySerializer.serialize("student:98"), valueSerializer.serialize(session), 3);
+        assertThat(sessionDAO.doReadSession(session.getId()), is(session));
     }
 
     @Test
