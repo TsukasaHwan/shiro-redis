@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
  * @author Teamo
  * @since 2022/05/19
  */
-public class LettuceRedisClusterManager implements IRedisManager {
+public class LettuceRedisClusterManager implements IRedisManager, AutoCloseable {
 
     /**
      * Comma-separated list of "host:port" pairs to bootstrap from. This represents an
@@ -82,14 +82,18 @@ public class LettuceRedisClusterManager implements IRedisManager {
      */
     private ClusterClientOptions clusterClientOptions = ClusterClientOptions.create();
 
+    /**
+     * RedisClusterClient.
+     */
+    private RedisClusterClient redisClusterClient;
+
     private void initialize() {
         if (genericObjectPool == null) {
             synchronized (LettuceRedisClusterManager.class) {
                 if (genericObjectPool == null) {
-                    RedisClusterClient redisClusterClient = RedisClusterClient.create(getClusterRedisURI());
+                    redisClusterClient = RedisClusterClient.create(getClusterRedisURI());
                     redisClusterClient.setOptions(clusterClientOptions);
-                    StatefulRedisClusterConnection<byte[], byte[]> connect = redisClusterClient.connect(new ByteArrayCodec());
-                    genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> connect, genericObjectPoolConfig);
+                    genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> redisClusterClient.connect(new ByteArrayCodec()), genericObjectPoolConfig);
                 }
             }
         }
@@ -103,6 +107,12 @@ public class LettuceRedisClusterManager implements IRedisManager {
             return genericObjectPool.borrowObject();
         } catch (Exception e) {
             throw new PoolException("Could not get a resource from the pool", e);
+        }
+    }
+
+    private void returnObject(StatefulRedisClusterConnection<byte[], byte[]> connection) {
+        if (connection != null) {
+            genericObjectPool.returnObject(connection);
         }
     }
 
@@ -128,7 +138,9 @@ public class LettuceRedisClusterManager implements IRedisManager {
             return null;
         }
         byte[] value = null;
-        try (StatefulRedisClusterConnection<byte[], byte[]> connection = getStatefulConnection()) {
+        StatefulRedisClusterConnection<byte[], byte[]> connection = null;
+        try {
+            connection = getStatefulConnection();
             if (isAsync) {
                 RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
                 value = LettuceFutures.awaitOrCancel(async.get(key), timeout.getSeconds(), TimeUnit.SECONDS);
@@ -136,6 +148,8 @@ public class LettuceRedisClusterManager implements IRedisManager {
                 RedisAdvancedClusterCommands<byte[], byte[]> sync = connection.sync();
                 value = sync.get(key);
             }
+        } finally {
+            returnObject(connection);
         }
         return value;
     }
@@ -145,7 +159,9 @@ public class LettuceRedisClusterManager implements IRedisManager {
         if (key == null) {
             return null;
         }
-        try (StatefulRedisClusterConnection<byte[], byte[]> connection = getStatefulConnection()) {
+        StatefulRedisClusterConnection<byte[], byte[]> connection = null;
+        try {
+            connection = getStatefulConnection();
             if (isAsync) {
                 RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
                 if (expire > 0) {
@@ -161,13 +177,17 @@ public class LettuceRedisClusterManager implements IRedisManager {
                     sync.set(key, value);
                 }
             }
+        } finally {
+            returnObject(connection);
         }
         return value;
     }
 
     @Override
     public void del(byte[] key) {
-        try (StatefulRedisClusterConnection<byte[], byte[]> connection = getStatefulConnection()) {
+        StatefulRedisClusterConnection<byte[], byte[]> connection = null;
+        try {
+            connection = getStatefulConnection();
             if (isAsync) {
                 RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
                 async.del(key);
@@ -175,14 +195,17 @@ public class LettuceRedisClusterManager implements IRedisManager {
                 RedisAdvancedClusterCommands<byte[], byte[]> sync = connection.sync();
                 sync.del(key);
             }
+        } finally {
+            returnObject(connection);
         }
     }
 
     @Override
     public Long dbSize(byte[] pattern) {
         AtomicLong dbSize = new AtomicLong(0L);
-
-        try (StatefulRedisClusterConnection<byte[], byte[]> connection = getStatefulConnection()) {
+        StatefulRedisClusterConnection<byte[], byte[]> connection = null;
+        try {
+            connection = getStatefulConnection();
             if (isAsync) {
                 RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
                 Partitions parse = ClusterPartitionParser.parse(LettuceFutures.awaitOrCancel(async.clusterNodes(), timeout.getSeconds(), TimeUnit.SECONDS));
@@ -214,6 +237,8 @@ public class LettuceRedisClusterManager implements IRedisManager {
                     }
                 });
             }
+        } finally {
+            returnObject(connection);
         }
         return dbSize.get();
     }
@@ -221,8 +246,9 @@ public class LettuceRedisClusterManager implements IRedisManager {
     @Override
     public Set<byte[]> keys(byte[] pattern) {
         Set<byte[]> keys = new HashSet<>();
-
-        try (StatefulRedisClusterConnection<byte[], byte[]> connection = getStatefulConnection()) {
+        StatefulRedisClusterConnection<byte[], byte[]> connection = null;
+        try {
+            connection = getStatefulConnection();
             if (isAsync) {
                 RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
                 Partitions parse = ClusterPartitionParser.parse(LettuceFutures.awaitOrCancel(async.clusterNodes(), timeout.getSeconds(), TimeUnit.SECONDS));
@@ -254,8 +280,20 @@ public class LettuceRedisClusterManager implements IRedisManager {
                     }
                 });
             }
+        } finally {
+            returnObject(connection);
         }
         return keys;
+    }
+
+    @Override
+    public void close() throws Exception {
+        if (genericObjectPool != null) {
+            genericObjectPool.close();
+        }
+        if (redisClusterClient != null) {
+            redisClusterClient.shutdown();
+        }
     }
 
     public List<String> getNodes() {

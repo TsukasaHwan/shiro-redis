@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
  * @author Teamo
  * @since 2022/05/19
  */
-public abstract class AbstractLettuceRedisManager implements IRedisManager {
+public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnection<byte[], byte[]>> implements IRedisManager, AutoCloseable {
 
     /**
      * Default value of count.
@@ -56,16 +56,21 @@ public abstract class AbstractLettuceRedisManager implements IRedisManager {
     /**
      * genericObjectPoolConfig used to initialize GenericObjectPoolConfig object.
      */
-    @SuppressWarnings("rawtypes")
-    private GenericObjectPoolConfig genericObjectPoolConfig = new GenericObjectPoolConfig<>();
+    private GenericObjectPoolConfig<T> genericObjectPoolConfig = new GenericObjectPoolConfig<>();
 
     /**
      * Get a stateful connection.
      *
      * @return T
      */
-    @SuppressWarnings("rawtypes")
-    protected abstract StatefulRedisConnection getStatefulConnection();
+    protected abstract T getStatefulConnection();
+
+    /**
+     * Return a stateful connection.
+     *
+     * @param connect T
+     */
+    protected abstract void returnObject(T connect);
 
     public Duration getTimeout() {
         return timeout;
@@ -115,22 +120,23 @@ public abstract class AbstractLettuceRedisManager implements IRedisManager {
         this.clientOptions = clientOptions;
     }
 
-    public GenericObjectPoolConfig<?> getGenericObjectPoolConfig() {
+    public GenericObjectPoolConfig<T> getGenericObjectPoolConfig() {
         return genericObjectPoolConfig;
     }
 
-    public void setGenericObjectPoolConfig(GenericObjectPoolConfig<?> genericObjectPoolConfig) {
+    public void setGenericObjectPoolConfig(GenericObjectPoolConfig<T> genericObjectPoolConfig) {
         this.genericObjectPoolConfig = genericObjectPoolConfig;
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public byte[] get(byte[] key) {
         if (key == null) {
             return null;
         }
         byte[] value = null;
-        try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
+        T connect = null;
+        try {
+            connect = getStatefulConnection();
             if (isAsync) {
                 RedisAsyncCommands<byte[], byte[]> async = connect.async();
                 RedisFuture<byte[]> redisFuture = async.get(key);
@@ -139,17 +145,20 @@ public abstract class AbstractLettuceRedisManager implements IRedisManager {
                 RedisCommands<byte[], byte[]> sync = connect.sync();
                 value = sync.get(key);
             }
+        } finally {
+            returnObject(connect);
         }
         return value;
     }
 
     @Override
-    @SuppressWarnings({"unchecked"})
     public byte[] set(byte[] key, byte[] value, int expire) {
         if (key == null) {
             return null;
         }
-        try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
+        T connect = null;
+        try {
+            connect = getStatefulConnection();
             if (isAsync) {
                 RedisAsyncCommands<byte[], byte[]> async = connect.async();
                 if (expire > 0) {
@@ -165,14 +174,17 @@ public abstract class AbstractLettuceRedisManager implements IRedisManager {
                     sync.set(key, value);
                 }
             }
+        } finally {
+            returnObject(connect);
         }
         return value;
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void del(byte[] key) {
-        try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
+        T connect = null;
+        try {
+            connect = getStatefulConnection();
             if (isAsync) {
                 RedisAsyncCommands<byte[], byte[]> async = connect.async();
                 async.del(key);
@@ -180,37 +192,45 @@ public abstract class AbstractLettuceRedisManager implements IRedisManager {
                 RedisCommands<byte[], byte[]> sync = connect.sync();
                 sync.del(key);
             }
+        } finally {
+            returnObject(connect);
         }
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public Long dbSize(byte[] pattern) {
         long dbSize = 0L;
         KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
         scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
         ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
-        try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
+        T connect = null;
+        try {
+            connect = getStatefulConnection();
             while (!scanCursor.isFinished()) {
                 scanCursor = getKeyScanCursor(connect, scanCursor, scanArgs);
                 dbSize += scanCursor.getKeys().size();
             }
+        } finally {
+            returnObject(connect);
         }
         return dbSize;
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public Set<byte[]> keys(byte[] pattern) {
         Set<byte[]> keys = new HashSet<>();
         KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
         scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
         ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
-        try (StatefulRedisConnection<byte[], byte[]> connect = getStatefulConnection()) {
+        T connect = null;
+        try {
+            connect = getStatefulConnection();
             while (!scanCursor.isFinished()) {
                 scanCursor = getKeyScanCursor(connect, scanCursor, scanArgs);
                 keys.addAll(scanCursor.getKeys());
             }
+        } finally {
+            returnObject(connect);
         }
         return keys;
     }

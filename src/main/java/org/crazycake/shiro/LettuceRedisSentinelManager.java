@@ -19,7 +19,7 @@ import java.util.Objects;
  * @author Teamo
  * @since 2022/05/19
  */
-public class LettuceRedisSentinelManager extends AbstractLettuceRedisManager {
+public class LettuceRedisSentinelManager extends AbstractLettuceRedisManager<StatefulRedisMasterReplicaConnection<byte[], byte[]>> {
     private static final String DEFAULT_MASTER_NAME = "mymaster";
 
     private String masterName = DEFAULT_MASTER_NAME;
@@ -35,18 +35,24 @@ public class LettuceRedisSentinelManager extends AbstractLettuceRedisManager {
      */
     private volatile GenericObjectPool<StatefulRedisMasterReplicaConnection<byte[], byte[]>> genericObjectPool;
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    /**
+     * RedisClient.
+     */
+    private RedisClient redisClient;
+
     private void initialize() {
         if (genericObjectPool == null) {
             synchronized (LettuceRedisSentinelManager.class) {
                 if (genericObjectPool == null) {
                     RedisURI redisURI = this.createSentinelRedisURI();
-                    RedisClient redisClient = RedisClient.create(redisURI);
+                    redisClient = RedisClient.create(redisURI);
                     redisClient.setOptions(getClientOptions());
-                    StatefulRedisMasterReplicaConnection<byte[], byte[]> connect = MasterReplica.connect(redisClient, new ByteArrayCodec(), redisURI);
-                    connect.setReadFrom(readFrom);
-                    GenericObjectPoolConfig genericObjectPoolConfig = getGenericObjectPoolConfig();
-                    genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> connect, genericObjectPoolConfig);
+                    GenericObjectPoolConfig<StatefulRedisMasterReplicaConnection<byte[], byte[]>> genericObjectPoolConfig = getGenericObjectPoolConfig();
+                    genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> {
+                        StatefulRedisMasterReplicaConnection<byte[], byte[]> connect = MasterReplica.connect(redisClient, new ByteArrayCodec(), redisURI);
+                        connect.setReadFrom(readFrom);
+                        return connect;
+                    }, genericObjectPoolConfig);
                 }
             }
         }
@@ -61,6 +67,23 @@ public class LettuceRedisSentinelManager extends AbstractLettuceRedisManager {
             return genericObjectPool.borrowObject();
         } catch (Exception e) {
             throw new PoolException("Could not get a resource from the pool", e);
+        }
+    }
+
+    @Override
+    protected void returnObject(StatefulRedisMasterReplicaConnection<byte[], byte[]> connect) {
+        if (connect != null) {
+            genericObjectPool.returnObject(connect);
+        }
+    }
+
+    @Override
+    public void close() throws Exception {
+        if (genericObjectPool != null) {
+            genericObjectPool.close();
+        }
+        if (redisClient != null) {
+            redisClient.shutdown();
         }
     }
 
@@ -117,5 +140,13 @@ public class LettuceRedisSentinelManager extends AbstractLettuceRedisManager {
 
     public void setReadFrom(ReadFrom readFrom) {
         this.readFrom = readFrom;
+    }
+
+    public GenericObjectPool<StatefulRedisMasterReplicaConnection<byte[], byte[]>> getGenericObjectPool() {
+        return genericObjectPool;
+    }
+
+    public void setGenericObjectPool(GenericObjectPool<StatefulRedisMasterReplicaConnection<byte[], byte[]>> genericObjectPool) {
+        this.genericObjectPool = genericObjectPool;
     }
 }

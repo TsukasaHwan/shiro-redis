@@ -16,7 +16,7 @@ import org.crazycake.shiro.exception.PoolException;
  * @author Teamo
  * @since 2022/05/18
  */
-public class LettuceRedisManager extends AbstractLettuceRedisManager {
+public class LettuceRedisManager extends AbstractLettuceRedisManager<StatefulRedisConnection<byte[], byte[]>> {
 
     /**
      * Redis server host.
@@ -33,14 +33,18 @@ public class LettuceRedisManager extends AbstractLettuceRedisManager {
      */
     private volatile GenericObjectPool<StatefulRedisConnection<byte[], byte[]>> genericObjectPool;
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    /**
+     * Redis client.
+     */
+    private RedisClient redisClient;
+
     private void initialize() {
         if (genericObjectPool == null) {
             synchronized (LettuceRedisManager.class) {
                 if (genericObjectPool == null) {
-                    RedisClient redisClient = RedisClient.create(createRedisURI());
+                    redisClient = RedisClient.create(createRedisURI());
                     redisClient.setOptions(getClientOptions());
-                    GenericObjectPoolConfig genericObjectPoolConfig = getGenericObjectPoolConfig();
+                    GenericObjectPoolConfig<StatefulRedisConnection<byte[], byte[]>> genericObjectPoolConfig = getGenericObjectPoolConfig();
                     genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> redisClient.connect(new ByteArrayCodec()), genericObjectPoolConfig);
                 }
             }
@@ -72,6 +76,23 @@ public class LettuceRedisManager extends AbstractLettuceRedisManager {
         }
     }
 
+    @Override
+    protected void returnObject(StatefulRedisConnection<byte[], byte[]> connect) {
+        if (connect != null) {
+            genericObjectPool.returnObject(connect);
+        }
+    }
+
+    @Override
+    public void close() throws Exception {
+        if (genericObjectPool != null) {
+            genericObjectPool.close();
+        }
+        if (redisClient != null) {
+            redisClient.shutdown();
+        }
+    }
+
     public String getHost() {
         return host;
     }
@@ -86,5 +107,13 @@ public class LettuceRedisManager extends AbstractLettuceRedisManager {
 
     public void setPort(int port) {
         this.port = port;
+    }
+
+    public GenericObjectPool<StatefulRedisConnection<byte[], byte[]>> getGenericObjectPool() {
+        return genericObjectPool;
+    }
+
+    public void setGenericObjectPool(GenericObjectPool<StatefulRedisConnection<byte[], byte[]>> genericObjectPool) {
+        this.genericObjectPool = genericObjectPool;
     }
 }
