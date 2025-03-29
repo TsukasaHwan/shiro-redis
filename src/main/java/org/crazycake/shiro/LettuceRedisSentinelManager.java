@@ -45,7 +45,7 @@ public class LettuceRedisSentinelManager extends AbstractLettuceRedisManager<Sta
             synchronized (LettuceRedisSentinelManager.class) {
                 if (genericObjectPool == null) {
                     RedisURI redisURI = this.createSentinelRedisURI();
-                    redisClient = RedisClient.create(redisURI);
+                    redisClient = RedisClient.create();
                     redisClient.setOptions(getClientOptions());
                     GenericObjectPoolConfig<StatefulRedisMasterReplicaConnection<byte[], byte[]>> genericObjectPoolConfig = getGenericObjectPoolConfig();
                     genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> {
