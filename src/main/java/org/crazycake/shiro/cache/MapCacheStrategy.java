@@ -23,11 +23,7 @@ public class MapCacheStrategy implements CacheStrategy {
 
     private final ThreadLocal<Map<Serializable, SessionInMemory>> sessionsInThread = ThreadLocal.withInitial(HashMap::new);
 
-    private long sessionInMemoryTimeout;
-
-    public MapCacheStrategy(long sessionInMemoryTimeout) {
-        this.sessionInMemoryTimeout = sessionInMemoryTimeout;
-    }
+    private long sessionInMemoryTimeout = DEFAULT_SESSION_IN_MEMORY_TIMEOUT;
 
     @Override
     public void put(Serializable sessionId, Session session) {

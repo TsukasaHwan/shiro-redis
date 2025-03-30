@@ -27,23 +27,13 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 	private static final String DEFAULT_SESSION_KEY_PREFIX = "shiro:session:";
 	private String keyPrefix = DEFAULT_SESSION_KEY_PREFIX;
 
-	/**
-	 * doReadSession be called about 10 times when login.
-	 * Save Session in ThreadLocal to resolve this problem. sessionInMemoryTimeout is expiration of Session in ThreadLocal.
-	 * The default value is 1000 milliseconds (1s).
-	 * Most of time, you don't need to change it.
-	 * <p>
-	 * You can turn it off by setting sessionInMemoryEnabled to false
-	 */
-	private static final long DEFAULT_SESSION_IN_MEMORY_TIMEOUT = 1000L;
-
 	private static final boolean DEFAULT_SESSION_IN_MEMORY_ENABLED = true;
 	private boolean sessionInMemoryEnabled = DEFAULT_SESSION_IN_MEMORY_ENABLED;
 
 	/**
-	 * The cache strategy implementation (e.g., MapCacheStrategy) for managing in-memory session storage, initialized with a default timeout of {@link #DEFAULT_SESSION_IN_MEMORY_TIMEOUT} milliseconds.
+	 * The cache strategy implementation (e.g., MapCacheStrategy) for managing in-memory session storage, initialized with a default timeout of {@link CacheStrategy#DEFAULT_SESSION_IN_MEMORY_TIMEOUT} milliseconds.
 	 */
-	private CacheStrategy cacheStrategy = new MapCacheStrategy(DEFAULT_SESSION_IN_MEMORY_TIMEOUT);
+	private CacheStrategy cacheStrategy = new MapCacheStrategy();
 
 	/**
 	 * expire time in seconds.

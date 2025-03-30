@@ -23,11 +23,7 @@ public class CaffeineCacheStrategy implements CacheStrategy {
 
     private final ThreadLocal<Cache<Serializable, SessionInMemory>> sessionsInThread = new ThreadLocal<>();
 
-    private long sessionInMemoryTimeout;
-
-    public CaffeineCacheStrategy(long sessionInMemoryTimeout) {
-        this.sessionInMemoryTimeout = sessionInMemoryTimeout;
-    }
+    private long sessionInMemoryTimeout = DEFAULT_SESSION_IN_MEMORY_TIMEOUT;
 
     @Override
     public void put(Serializable sessionId, Session session) {
