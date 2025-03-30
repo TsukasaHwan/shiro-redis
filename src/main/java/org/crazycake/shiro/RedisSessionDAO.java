@@ -3,7 +3,8 @@ package org.crazycake.shiro;
 import org.apache.shiro.session.Session;
 import org.apache.shiro.session.UnknownSessionException;
 import org.apache.shiro.session.mgt.eis.AbstractSessionDAO;
-import org.crazycake.shiro.common.SessionInMemory;
+import org.crazycake.shiro.cache.CacheStrategy;
+import org.crazycake.shiro.cache.MapCacheStrategy;
 import org.crazycake.shiro.exception.SerializationException;
 import org.crazycake.shiro.serializer.ObjectSerializer;
 import org.crazycake.shiro.serializer.RedisSerializer;
@@ -12,14 +13,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
-import java.util.*;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Used for setting/getting authentication information from Redis
  */
 public class RedisSessionDAO extends AbstractSessionDAO {
 
-	private static Logger logger = LoggerFactory.getLogger(RedisSessionDAO.class);
+	private final static Logger logger = LoggerFactory.getLogger(RedisSessionDAO.class);
 
 	private static final String DEFAULT_SESSION_KEY_PREFIX = "shiro:session:";
 	private String keyPrefix = DEFAULT_SESSION_KEY_PREFIX;
@@ -29,22 +32,24 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 	 * Save Session in ThreadLocal to resolve this problem. sessionInMemoryTimeout is expiration of Session in ThreadLocal.
 	 * The default value is 1000 milliseconds (1s).
 	 * Most of time, you don't need to change it.
-	 *
+	 * <p>
 	 * You can turn it off by setting sessionInMemoryEnabled to false
 	 */
 	private static final long DEFAULT_SESSION_IN_MEMORY_TIMEOUT = 1000L;
-	private long sessionInMemoryTimeout = DEFAULT_SESSION_IN_MEMORY_TIMEOUT;
 
 	private static final boolean DEFAULT_SESSION_IN_MEMORY_ENABLED = true;
 	private boolean sessionInMemoryEnabled = DEFAULT_SESSION_IN_MEMORY_ENABLED;
 
-	private static ThreadLocal sessionsInThread = new ThreadLocal();
+	/**
+	 * The cache strategy implementation (e.g., MapCacheStrategy) for managing in-memory session storage, initialized with a default timeout of {@link #DEFAULT_SESSION_IN_MEMORY_TIMEOUT} milliseconds.
+	 */
+	private CacheStrategy cacheStrategy = new MapCacheStrategy(DEFAULT_SESSION_IN_MEMORY_TIMEOUT);
 
 	/**
 	 * expire time in seconds.
 	 * NOTE: Please make sure expire is longer than session.getTimeout(),
 	 * otherwise you might need the issue that session in Redis got erased when the Session is still available
-	 *
+	 * <p>
 	 * DEFAULT_EXPIRE: use the timeout of session instead of setting it by yourself
 	 * NO_EXPIRE: never expire
 	 */
@@ -213,75 +218,19 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 	}
 
 	private void setSessionToThreadLocal(Serializable sessionId, Session session) {
-		this.initSessionsInThread();
-		Map<Serializable, SessionInMemory> sessionMap = (Map<Serializable, SessionInMemory>) sessionsInThread.get();
-		sessionMap.put(sessionId, this.createSessionInMemory(session));
+		this.cacheStrategy.put(sessionId, session);
 	}
 
 	private void delSessionFromThreadLocal(Serializable sessionId) {
-		Map<Serializable, SessionInMemory> sessionMap = (Map<Serializable, SessionInMemory>) sessionsInThread.get();
-		if (sessionMap == null) {
-			return;
-		}
-		sessionMap.remove(sessionId);
-	}
-
-	private SessionInMemory createSessionInMemory(Session session) {
-		SessionInMemory sessionInMemory = new SessionInMemory();
-		sessionInMemory.setCreateTime(new Date());
-		sessionInMemory.setSession(session);
-		return sessionInMemory;
-	}
-
-	private void initSessionsInThread() {
-		Map<Serializable, SessionInMemory> sessionMap = (Map<Serializable, SessionInMemory>) sessionsInThread.get();
-		if (sessionMap == null) {
-			sessionMap = new HashMap<Serializable, SessionInMemory>();
-			sessionsInThread.set(sessionMap);
-		}
+		this.cacheStrategy.remove(sessionId);
 	}
 
 	private void removeExpiredSessionInMemory() {
-		Map<Serializable, SessionInMemory> sessionMap = (Map<Serializable, SessionInMemory>) sessionsInThread.get();
-		if (sessionMap == null) {
-			return;
-		}
-		Iterator<Serializable> it = sessionMap.keySet().iterator();
-		while (it.hasNext()) {
-			Serializable sessionId = it.next();
-			SessionInMemory sessionInMemory = sessionMap.get(sessionId);
-			if (sessionInMemory == null) {
-				it.remove();
-				continue;
-			}
-			long liveTime = getSessionInMemoryLiveTime(sessionInMemory);
-			if (liveTime > sessionInMemoryTimeout) {
-				it.remove();
-			}
-		}
-		if (sessionMap.size() == 0) {
-			sessionsInThread.remove();
-		}
+		this.cacheStrategy.removeExpired();
 	}
 
 	private Session getSessionFromThreadLocal(Serializable sessionId) {
-		if (sessionsInThread.get() == null) {
-			return null;
-		}
-
-		Map<Serializable, SessionInMemory> sessionMap = (Map<Serializable, SessionInMemory>) sessionsInThread.get();
-		SessionInMemory sessionInMemory = sessionMap.get(sessionId);
-		if (sessionInMemory == null) {
-			return null;
-		}
-
-		logger.debug("read session from memory");
-		return sessionInMemory.getSession();
-	}
-
-	private long getSessionInMemoryLiveTime(SessionInMemory sessionInMemory) {
-		Date now = new Date();
-		return now.getTime() - sessionInMemory.getCreateTime().getTime();
+		return this.cacheStrategy.get(sessionId);
 	}
 
 	private String getRedisSessionKey(Serializable sessionId) {
@@ -321,11 +270,11 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 	}
 
 	public long getSessionInMemoryTimeout() {
-		return sessionInMemoryTimeout;
+		return cacheStrategy.getSessionInMemoryTimeout();
 	}
 
 	public void setSessionInMemoryTimeout(long sessionInMemoryTimeout) {
-		this.sessionInMemoryTimeout = sessionInMemoryTimeout;
+		this.cacheStrategy.setSessionInMemoryTimeout(sessionInMemoryTimeout);
 	}
 
 	public int getExpire() {
@@ -344,7 +293,11 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 		this.sessionInMemoryEnabled = sessionInMemoryEnabled;
 	}
 
-	public static ThreadLocal getSessionsInThread() {
-		return sessionsInThread;
+	public CacheStrategy getCacheStrategy() {
+		return cacheStrategy;
+	}
+
+	public void setCacheStrategy(CacheStrategy cacheStrategy) {
+		this.cacheStrategy = cacheStrategy;
 	}
 }
