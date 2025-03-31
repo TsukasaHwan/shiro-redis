@@ -22,7 +22,7 @@ import java.util.Set;
  */
 public class RedisSessionDAO extends AbstractSessionDAO {
 
-	private final static Logger logger = LoggerFactory.getLogger(RedisSessionDAO.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(RedisSessionDAO.class);
 
 	private static final String DEFAULT_SESSION_KEY_PREFIX = "shiro:session:";
 	private String keyPrefix = DEFAULT_SESSION_KEY_PREFIX;
@@ -31,7 +31,8 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 	private boolean sessionInMemoryEnabled = DEFAULT_SESSION_IN_MEMORY_ENABLED;
 
 	/**
-	 * The cache strategy implementation (e.g., MapCacheStrategy) for managing in-memory session storage, initialized with a default timeout of {@link CacheStrategy#DEFAULT_SESSION_IN_MEMORY_TIMEOUT} milliseconds.
+	 * The cache strategy implementation (e.g., MapCacheStrategy) for managing in-memory session storage
+	 * initialized with a default timeout of {@link CacheStrategy#DEFAULT_SESSION_IN_MEMORY_TIMEOUT} milliseconds.
 	 */
 	private CacheStrategy cacheStrategy = new MapCacheStrategy();
 
@@ -82,7 +83,7 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 
 	private void saveSession(Session session) throws UnknownSessionException {
 		if (session == null || session.getId() == null) {
-			logger.error("session or session id is null");
+			LOGGER.error("session or session id is null");
 			throw new UnknownSessionException("session or session id is null");
 		}
 		byte[] key;
@@ -91,7 +92,7 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 			key = keySerializer.serialize(getRedisSessionKey(session.getId()));
 			value = valueSerializer.serialize(session);
 		} catch (SerializationException e) {
-			logger.error("serialize session error. session id=" + session.getId());
+			LOGGER.error("serialize session error. session id=" + session.getId());
 			throw new UnknownSessionException(e);
 		}
 		if (expire == DEFAULT_EXPIRE) {
@@ -99,11 +100,11 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 			return;
 		}
 		if (expire != NO_EXPIRE && expire * MILLISECONDS_IN_A_SECOND < session.getTimeout()) {
-			logger.warn("Redis session expire time: "
-					+ (expire * MILLISECONDS_IN_A_SECOND)
-					+ " is less than Session timeout: "
-					+ session.getTimeout()
-					+ " . It may cause some problems.");
+			LOGGER.warn("Redis session expire time: "
+						+ (expire * MILLISECONDS_IN_A_SECOND)
+						+ " is less than Session timeout: "
+						+ session.getTimeout()
+						+ " . It may cause some problems.");
 		}
 		redisManager.set(key, value, expire);
 	}
@@ -118,7 +119,7 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 			this.removeExpiredSessionInMemory();
 		}
 		if (session == null || session.getId() == null) {
-			logger.error("session or session id is null");
+			LOGGER.error("session or session id is null");
 			return;
 		}
 		if (this.sessionInMemoryEnabled) {
@@ -127,7 +128,7 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 		try {
 			redisManager.del(keySerializer.serialize(getRedisSessionKey(session.getId())));
 		} catch (SerializationException e) {
-			logger.error("delete session error. session id=" + session.getId());
+			LOGGER.error("delete session error. session id=" + session.getId());
 		}
 	}
 
@@ -153,7 +154,7 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 				}
 			}
 		} catch (SerializationException e) {
-			logger.error("get active sessions error.");
+			LOGGER.error("get active sessions error.");
 		}
 		return sessions;
 	}
@@ -164,7 +165,7 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 			this.removeExpiredSessionInMemory();
 		}
 		if (session == null) {
-			logger.error("session is null");
+			LOGGER.error("session is null");
 			throw new UnknownSessionException("session is null");
 		}
 		Serializable sessionId = this.generateSessionId(session);
@@ -184,7 +185,7 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 			this.removeExpiredSessionInMemory();
 		}
 		if (sessionId == null) {
-			logger.warn("session id is null");
+			LOGGER.warn("session id is null");
 			return null;
 		}
 		if (this.sessionInMemoryEnabled) {
@@ -196,13 +197,13 @@ public class RedisSessionDAO extends AbstractSessionDAO {
 		Session session = null;
 		try {
 			String sessionRedisKey = getRedisSessionKey(sessionId);
-			logger.debug("read session: " + sessionRedisKey + " from Redis");
+			LOGGER.debug("read session: " + sessionRedisKey + " from Redis");
 			session = (Session) valueSerializer.deserialize(redisManager.get(keySerializer.serialize(sessionRedisKey)));
 			if (this.sessionInMemoryEnabled) {
 				setSessionToThreadLocal(sessionId, session);
 			}
 		} catch (SerializationException e) {
-			logger.error("read session error. sessionId: " + sessionId);
+			LOGGER.error("read session error. sessionId: " + sessionId);
 		}
 		return session;
 	}

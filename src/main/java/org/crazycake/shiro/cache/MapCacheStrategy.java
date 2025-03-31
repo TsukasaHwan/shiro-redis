@@ -19,7 +19,7 @@ import java.util.Map;
  */
 public class MapCacheStrategy implements CacheStrategy {
 
-    private final static Logger logger = LoggerFactory.getLogger(MapCacheStrategy.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(MapCacheStrategy.class);
 
     private final ThreadLocal<Map<Serializable, SessionInMemory>> sessionsInThread = ThreadLocal.withInitial(HashMap::new);
 
@@ -36,7 +36,7 @@ public class MapCacheStrategy implements CacheStrategy {
         if (sessionInMemory == null) {
             return null;
         }
-        logger.debug("read session from map cache");
+        LOGGER.debug("read session from map cache");
         return sessionInMemory.getSession();
     }
 

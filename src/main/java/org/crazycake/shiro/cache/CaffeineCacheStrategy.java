@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class CaffeineCacheStrategy implements CacheStrategy {
 
-    private final static Logger logger = LoggerFactory.getLogger(CaffeineCacheStrategy.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(CaffeineCacheStrategy.class);
 
     private final ThreadLocal<Cache<Serializable, SessionInMemory>> sessionsInThread = new ThreadLocal<>();
 
@@ -36,7 +36,7 @@ public class CaffeineCacheStrategy implements CacheStrategy {
         if (sessionInMemory == null) {
             return null;
         }
-        logger.debug("read session from caffeine cache");
+        LOGGER.debug("read session from caffeine cache");
         return sessionInMemory.getSession();
     }
 
