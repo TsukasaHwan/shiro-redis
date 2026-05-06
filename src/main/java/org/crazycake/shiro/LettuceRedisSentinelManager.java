@@ -6,20 +6,20 @@ import io.lettuce.core.RedisURI;
 import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.masterreplica.MasterReplica;
 import io.lettuce.core.masterreplica.StatefulRedisMasterReplicaConnection;
-import io.lettuce.core.support.ConnectionPoolSupport;
-import org.apache.commons.pool2.impl.GenericObjectPool;
-import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.crazycake.shiro.common.AbstractLettuceRedisManager;
-import org.crazycake.shiro.exception.PoolException;
 
 import java.util.List;
 import java.util.Objects;
 
 /**
+ * Lettuce sentinel manager without connection pool.
+ *
  * @author Teamo
  * @since 2022/05/19
  */
-public class LettuceRedisSentinelManager extends AbstractLettuceRedisManager<StatefulRedisMasterReplicaConnection<byte[], byte[]>> {
+public class LettuceRedisSentinelManager
+        extends AbstractLettuceRedisManager<StatefulRedisMasterReplicaConnection<byte[], byte[]>> {
+
     private static final String DEFAULT_MASTER_NAME = "mymaster";
 
     private String masterName = DEFAULT_MASTER_NAME;
@@ -30,73 +30,119 @@ public class LettuceRedisSentinelManager extends AbstractLettuceRedisManager<Sta
 
     private ReadFrom readFrom = ReadFrom.REPLICA_PREFERRED;
 
-    /**
-     * GenericObjectPool.
-     */
-    private volatile GenericObjectPool<StatefulRedisMasterReplicaConnection<byte[], byte[]>> genericObjectPool;
+    private volatile RedisClient redisClient;
 
-    /**
-     * RedisClient.
-     */
-    private RedisClient redisClient;
+    private volatile StatefulRedisMasterReplicaConnection<byte[], byte[]> connection;
+
+    private final Object initLock = new Object();
+
+    private volatile boolean closed = false;
 
     private void initialize() {
-        if (genericObjectPool == null) {
-            synchronized (LettuceRedisSentinelManager.class) {
-                if (genericObjectPool == null) {
-                    RedisURI redisURI = this.createSentinelRedisURI();
-                    redisClient = RedisClient.create();
-                    redisClient.setOptions(getClientOptions());
-                    GenericObjectPoolConfig<StatefulRedisMasterReplicaConnection<byte[], byte[]>> genericObjectPoolConfig = getGenericObjectPoolConfig();
-                    genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> {
-                        StatefulRedisMasterReplicaConnection<byte[], byte[]> connect = MasterReplica.connect(redisClient, new ByteArrayCodec(), redisURI);
-                        connect.setReadFrom(readFrom);
-                        return connect;
-                    }, genericObjectPoolConfig);
-                }
+        if (connection != null) {
+            return;
+        }
+
+        synchronized (initLock) {
+            if (connection != null) {
+                return;
+            }
+
+            validateConfiguration();
+
+            RedisURI redisURI = createSentinelRedisURI();
+
+            RedisClient client = RedisClient.create();
+            client.setOptions(getClientOptions());
+
+            StatefulRedisMasterReplicaConnection<byte[], byte[]> conn =
+                    MasterReplica.connect(client, new ByteArrayCodec(), redisURI);
+            conn.setReadFrom(readFrom);
+
+            this.redisClient = client;
+            this.connection = conn;
+        }
+    }
+
+    private void validateConfiguration() {
+        validateBaseConfiguration();
+
+        Objects.requireNonNull(nodes, "nodes must not be null");
+        if (nodes.isEmpty()) {
+            throw new IllegalArgumentException("nodes must not be empty");
+        }
+        if (masterName == null || masterName.trim().isEmpty()) {
+            throw new IllegalArgumentException("masterName must not be blank");
+        }
+    }
+
+    @Override
+    protected StatefulRedisMasterReplicaConnection<byte[], byte[]> getConnection() {
+        if (closed) {
+            throw new IllegalStateException("LettuceRedisSentinelManager is already closed");
+        }
+        if (connection == null) {
+            initialize();
+        }
+        return connection;
+    }
+
+    @Override
+    public void close() {
+        closed = true;
+
+        StatefulRedisMasterReplicaConnection<byte[], byte[]> conn = this.connection;
+        RedisClient client = this.redisClient;
+
+        this.connection = null;
+        this.redisClient = null;
+
+        if (conn != null) {
+            try {
+                conn.close();
+            } catch (Exception ignored) {
+            }
+        }
+
+        if (client != null) {
+            try {
+                client.shutdown();
+            } catch (Exception ignored) {
             }
         }
     }
 
-    @Override
-    protected StatefulRedisMasterReplicaConnection<byte[], byte[]> getStatefulConnection() {
-        if (genericObjectPool == null) {
-            initialize();
-        }
-        try {
-            return genericObjectPool.borrowObject();
-        } catch (Exception e) {
-            throw new PoolException("Could not get a resource from the pool", e);
-        }
-    }
-
-    @Override
-    protected void returnObject(StatefulRedisMasterReplicaConnection<byte[], byte[]> connect) {
-        if (connect != null) {
-            genericObjectPool.returnObject(connect);
-        }
-    }
-
-    @Override
-    public void close() throws Exception {
-        if (genericObjectPool != null) {
-            genericObjectPool.close();
-        }
-        if (redisClient != null) {
-            redisClient.shutdown();
-        }
-    }
-
     private RedisURI createSentinelRedisURI() {
-        Objects.requireNonNull(nodes, "nodes must not be null!");
+        Objects.requireNonNull(nodes, "nodes must not be null");
 
         RedisURI.Builder builder = RedisURI.builder();
+
         for (String node : nodes) {
-            String[] hostAndPort = node.split(":");
+            if (node == null || node.trim().isEmpty()) {
+                throw new IllegalArgumentException("node must not be blank");
+            }
 
-            RedisURI.Builder sentinelBuilder = RedisURI.Builder.redis(hostAndPort[0], Integer.parseInt(hostAndPort[1]));
+            String[] hostAndPort = node.trim().split(":");
+            if (hostAndPort.length != 2) {
+                throw new IllegalArgumentException("Invalid node format: " + node + ", expected host:port");
+            }
 
-            if (sentinelPassword != null) {
+            String host = hostAndPort[0].trim();
+            String portText = hostAndPort[1].trim();
+
+            if (host.isEmpty()) {
+                throw new IllegalArgumentException("Invalid node host: " + node);
+            }
+
+            int port;
+            try {
+                port = Integer.parseInt(portText);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid node port: " + node, e);
+            }
+
+            RedisURI.Builder sentinelBuilder = RedisURI.Builder.redis(host, port);
+            if (sentinelPassword != null && !sentinelPassword.isEmpty()) {
                 sentinelBuilder.withPassword(sentinelPassword.toCharArray());
             }
 
@@ -104,10 +150,14 @@ public class LettuceRedisSentinelManager extends AbstractLettuceRedisManager<Sta
         }
 
         String password = getPassword();
-        if (password != null) {
+        if (password != null && !password.isEmpty()) {
             builder.withPassword(password.toCharArray());
         }
-        return builder.withSentinelMasterId(masterName).withDatabase(getDatabase()).build();
+
+        return builder.withSentinelMasterId(masterName)
+                .withDatabase(getDatabase())
+                .withTimeout(getTimeout())
+                .build();
     }
 
     public String getMasterName() {
@@ -142,11 +192,11 @@ public class LettuceRedisSentinelManager extends AbstractLettuceRedisManager<Sta
         this.readFrom = readFrom;
     }
 
-    public GenericObjectPool<StatefulRedisMasterReplicaConnection<byte[], byte[]>> getGenericObjectPool() {
-        return genericObjectPool;
+    public RedisClient getRedisClient() {
+        return redisClient;
     }
 
-    public void setGenericObjectPool(GenericObjectPool<StatefulRedisMasterReplicaConnection<byte[], byte[]>> genericObjectPool) {
-        this.genericObjectPool = genericObjectPool;
+    public StatefulRedisMasterReplicaConnection<byte[], byte[]> getStatefulConnection() {
+        return connection;
     }
 }

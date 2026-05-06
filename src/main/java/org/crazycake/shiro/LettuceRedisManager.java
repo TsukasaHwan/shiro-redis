@@ -4,14 +4,10 @@ import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.codec.ByteArrayCodec;
-import io.lettuce.core.support.ConnectionPoolSupport;
-import org.apache.commons.pool2.impl.GenericObjectPool;
-import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.crazycake.shiro.common.AbstractLettuceRedisManager;
-import org.crazycake.shiro.exception.PoolException;
 
 /**
- * Singleton lettuce redis
+ * Standalone lettuce redis manager without connection pool.
  *
  * @author Teamo
  * @since 2022/05/18
@@ -28,26 +24,44 @@ public class LettuceRedisManager extends AbstractLettuceRedisManager<StatefulRed
      */
     private int port = RedisURI.DEFAULT_REDIS_PORT;
 
-    /**
-     * GenericObjectPool.
-     */
-    private volatile GenericObjectPool<StatefulRedisConnection<byte[], byte[]>> genericObjectPool;
+    private volatile RedisClient redisClient;
 
-    /**
-     * Redis client.
-     */
-    private RedisClient redisClient;
+    private volatile StatefulRedisConnection<byte[], byte[]> connection;
+
+    private final Object initLock = new Object();
+
+    private volatile boolean closed = false;
 
     private void initialize() {
-        if (genericObjectPool == null) {
-            synchronized (LettuceRedisManager.class) {
-                if (genericObjectPool == null) {
-                    redisClient = RedisClient.create(createRedisURI());
-                    redisClient.setOptions(getClientOptions());
-                    GenericObjectPoolConfig<StatefulRedisConnection<byte[], byte[]>> genericObjectPoolConfig = getGenericObjectPoolConfig();
-                    genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> redisClient.connect(new ByteArrayCodec()), genericObjectPoolConfig);
-                }
+        if (connection != null) {
+            return;
+        }
+
+        synchronized (initLock) {
+            if (connection != null) {
+                return;
             }
+
+            validateConfiguration();
+
+            RedisClient client = RedisClient.create(createRedisURI());
+            client.setOptions(getClientOptions());
+
+            StatefulRedisConnection<byte[], byte[]> redisConnection = client.connect(new ByteArrayCodec());
+
+            this.redisClient = client;
+            this.connection = redisConnection;
+        }
+    }
+
+    private void validateConfiguration() {
+        validateBaseConfiguration();
+
+        if (host == null || host.trim().isEmpty()) {
+            throw new IllegalArgumentException("host must not be blank");
+        }
+        if (port <= 0 || port > 65535) {
+            throw new IllegalArgumentException("port must be between 1 and 65535");
         }
     }
 
@@ -57,39 +71,47 @@ public class LettuceRedisManager extends AbstractLettuceRedisManager<StatefulRed
                 .withPort(getPort())
                 .withDatabase(getDatabase())
                 .withTimeout(getTimeout());
+
         String password = getPassword();
-        if (password != null) {
+        if (password != null && !password.isEmpty()) {
             builder.withPassword(password.toCharArray());
         }
         return builder.build();
     }
 
     @Override
-    protected StatefulRedisConnection<byte[], byte[]> getStatefulConnection() {
-        if (genericObjectPool == null) {
+    protected StatefulRedisConnection<byte[], byte[]> getConnection() {
+        if (closed) {
+            throw new IllegalStateException("LettuceRedisManager is already closed");
+        }
+        if (connection == null) {
             initialize();
         }
-        try {
-            return genericObjectPool.borrowObject();
-        } catch (Exception e) {
-            throw new PoolException("Could not get a resource from the pool", e);
-        }
+        return connection;
     }
 
     @Override
-    protected void returnObject(StatefulRedisConnection<byte[], byte[]> connect) {
-        if (connect != null) {
-            genericObjectPool.returnObject(connect);
-        }
-    }
+    public void close() {
+        closed = true;
 
-    @Override
-    public void close() throws Exception {
-        if (genericObjectPool != null) {
-            genericObjectPool.close();
+        StatefulRedisConnection<byte[], byte[]> conn = this.connection;
+        RedisClient client = this.redisClient;
+
+        this.connection = null;
+        this.redisClient = null;
+
+        if (conn != null) {
+            try {
+                conn.close();
+            } catch (Exception ignored) {
+            }
         }
-        if (redisClient != null) {
-            redisClient.shutdown();
+
+        if (client != null) {
+            try {
+                client.shutdown();
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -109,11 +131,11 @@ public class LettuceRedisManager extends AbstractLettuceRedisManager<StatefulRed
         this.port = port;
     }
 
-    public GenericObjectPool<StatefulRedisConnection<byte[], byte[]>> getGenericObjectPool() {
-        return genericObjectPool;
+    public RedisClient getRedisClient() {
+        return redisClient;
     }
 
-    public void setGenericObjectPool(GenericObjectPool<StatefulRedisConnection<byte[], byte[]>> genericObjectPool) {
-        this.genericObjectPool = genericObjectPool;
+    public StatefulRedisConnection<byte[], byte[]> getStatefulConnection() {
+        return connection;
     }
 }

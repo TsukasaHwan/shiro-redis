@@ -1,133 +1,152 @@
 package org.crazycake.shiro;
 
-import io.lettuce.core.*;
+import io.lettuce.core.KeyScanCursor;
+import io.lettuce.core.RedisURI;
+import io.lettuce.core.ScanArgs;
+import io.lettuce.core.ScanCursor;
+import io.lettuce.core.SetArgs;
 import io.lettuce.core.cluster.ClusterClientOptions;
 import io.lettuce.core.cluster.RedisClusterClient;
 import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
-import io.lettuce.core.cluster.api.async.RedisAdvancedClusterAsyncCommands;
-import io.lettuce.core.cluster.api.async.RedisClusterAsyncCommands;
 import io.lettuce.core.cluster.api.sync.RedisAdvancedClusterCommands;
 import io.lettuce.core.cluster.api.sync.RedisClusterCommands;
 import io.lettuce.core.cluster.models.partitions.ClusterPartitionParser;
 import io.lettuce.core.cluster.models.partitions.Partitions;
+import io.lettuce.core.cluster.models.partitions.RedisClusterNode;
 import io.lettuce.core.codec.ByteArrayCodec;
-import io.lettuce.core.support.ConnectionPoolSupport;
-import org.apache.commons.pool2.impl.GenericObjectPool;
-import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
-import org.crazycake.shiro.exception.PoolException;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 /**
+ * Lettuce Redis Cluster manager without connection pool.
+ *
  * @author Teamo
  * @since 2022/05/19
  */
 public class LettuceRedisClusterManager implements IRedisManager, AutoCloseable {
 
     /**
-     * Comma-separated list of "host:port" pairs to bootstrap from. This represents an
-     * "initial" list of cluster nodes and is required to have at least one entry.
+     * Bootstrap nodes in host:port format.
      */
     private List<String> nodes;
 
-    /**
-     * Default value of count.
-     */
     private static final int DEFAULT_COUNT = 100;
 
     /**
-     * timeout for RedisClient try to connect to redis server, not expire time! unit seconds.
+     * Connect timeout, not expire time.
      */
     private Duration timeout = RedisURI.DEFAULT_TIMEOUT_DURATION;
 
-    /**
-     * Redis database.
-     */
-    private int database = 0;
-
-    /**
-     * Redis password.
-     */
     private String password;
 
     /**
-     * Whether to enable async.
-     */
-    private boolean isAsync = true;
-
-    /**
-     * The number of elements returned at every iteration.
+     * Scan count.
      */
     private int count = DEFAULT_COUNT;
 
     /**
-     * genericObjectPoolConfig used to initialize GenericObjectPoolConfig object.
-     */
-    private GenericObjectPoolConfig<StatefulRedisClusterConnection<byte[], byte[]>> genericObjectPoolConfig = new GenericObjectPoolConfig<>();
-
-    /**
-     * GenericObjectPool.
-     */
-    private volatile GenericObjectPool<StatefulRedisClusterConnection<byte[], byte[]>> genericObjectPool;
-
-    /**
-     * ClusterClientOptions used to initialize RedisClient.
+     * Cluster client options.
      */
     private ClusterClientOptions clusterClientOptions = ClusterClientOptions.create();
 
-    /**
-     * RedisClusterClient.
-     */
-    private RedisClusterClient redisClusterClient;
+    private volatile RedisClusterClient redisClusterClient;
+
+    private volatile StatefulRedisClusterConnection<byte[], byte[]> connection;
+
+    private final Object initLock = new Object();
+
+    private volatile boolean closed = false;
 
     private void initialize() {
-        if (genericObjectPool == null) {
-            synchronized (LettuceRedisClusterManager.class) {
-                if (genericObjectPool == null) {
-                    redisClusterClient = RedisClusterClient.create(getClusterRedisURI());
-                    redisClusterClient.setOptions(clusterClientOptions);
-                    genericObjectPool = ConnectionPoolSupport.createGenericObjectPool(() -> redisClusterClient.connect(new ByteArrayCodec()), genericObjectPoolConfig);
-                }
+        if (connection != null) {
+            return;
+        }
+
+        synchronized (initLock) {
+            if (connection != null) {
+                return;
             }
+
+            validateConfiguration();
+
+            RedisClusterClient client = RedisClusterClient.create(getClusterRedisURI());
+            client.setOptions(clusterClientOptions);
+
+            StatefulRedisClusterConnection<byte[], byte[]> clusterConnection =
+                    client.connect(new ByteArrayCodec());
+
+            this.redisClusterClient = client;
+            this.connection = clusterConnection;
         }
     }
 
-    private StatefulRedisClusterConnection<byte[], byte[]> getStatefulConnection() {
-        if (genericObjectPool == null) {
+    private void validateConfiguration() {
+        Objects.requireNonNull(nodes, "nodes must not be null");
+        if (nodes.isEmpty()) {
+            throw new IllegalArgumentException("nodes must not be empty");
+        }
+        if (count <= 0) {
+            throw new IllegalArgumentException("count must be greater than 0");
+        }
+    }
+
+    private StatefulRedisClusterConnection<byte[], byte[]> getConnection() {
+        if (closed) {
+            throw new IllegalStateException("LettuceRedisClusterManager is already closed");
+        }
+        if (connection == null) {
             initialize();
         }
-        try {
-            return genericObjectPool.borrowObject();
-        } catch (Exception e) {
-            throw new PoolException("Could not get a resource from the pool", e);
-        }
+        return connection;
     }
 
-    private void returnObject(StatefulRedisClusterConnection<byte[], byte[]> connection) {
-        if (connection != null) {
-            genericObjectPool.returnObject(connection);
-        }
+    private RedisAdvancedClusterCommands<byte[], byte[]> syncCommands() {
+        return getConnection().sync();
     }
 
     private List<RedisURI> getClusterRedisURI() {
-        Objects.requireNonNull(nodes, "nodes must not be null!");
+        Objects.requireNonNull(nodes, "nodes must not be null");
+
         return nodes.stream().map(node -> {
-            String[] hostAndPort = node.split(":");
+            if (node == null || node.trim().isEmpty()) {
+                throw new IllegalArgumentException("node must not be blank");
+            }
+
+            String[] hostAndPort = node.trim().split(":");
+            if (hostAndPort.length != 2) {
+                throw new IllegalArgumentException("Invalid node format: " + node + ", expected host:port");
+            }
+
+            String host = hostAndPort[0].trim();
+            String portText = hostAndPort[1].trim();
+
+            if (host.isEmpty()) {
+                throw new IllegalArgumentException("Invalid node host: " + node);
+            }
+
+            int port;
+            try {
+                port = Integer.parseInt(portText);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid node port: " + node, e);
+            }
+
             RedisURI.Builder builder = RedisURI.builder()
-                    .withHost(hostAndPort[0])
-                    .withPort(Integer.parseInt(hostAndPort[1]))
-                    .withDatabase(database)
+                    .withHost(host)
+                    .withPort(port)
                     .withTimeout(timeout);
-            if (password != null) {
+
+            if (password != null && !password.isEmpty()) {
                 builder.withPassword(password.toCharArray());
             }
+
             return builder.build();
         }).collect(Collectors.toList());
     }
@@ -137,21 +156,7 @@ public class LettuceRedisClusterManager implements IRedisManager, AutoCloseable 
         if (key == null) {
             return null;
         }
-        byte[] value = null;
-        StatefulRedisClusterConnection<byte[], byte[]> connection = null;
-        try {
-            connection = getStatefulConnection();
-            if (isAsync) {
-                RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
-                value = LettuceFutures.awaitOrCancel(async.get(key), timeout.getSeconds(), TimeUnit.SECONDS);
-            } else {
-                RedisAdvancedClusterCommands<byte[], byte[]> sync = connection.sync();
-                value = sync.get(key);
-            }
-        } finally {
-            returnObject(connection);
-        }
-        return value;
+        return syncCommands().get(key);
     }
 
     @Override
@@ -159,141 +164,112 @@ public class LettuceRedisClusterManager implements IRedisManager, AutoCloseable 
         if (key == null) {
             return null;
         }
-        StatefulRedisClusterConnection<byte[], byte[]> connection = null;
-        try {
-            connection = getStatefulConnection();
-            if (isAsync) {
-                RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
-                if (expire > 0) {
-                    async.set(key, value, SetArgs.Builder.ex(expire));
-                } else {
-                    async.set(key, value);
-                }
-            } else {
-                RedisAdvancedClusterCommands<byte[], byte[]> sync = connection.sync();
-                if (expire > 0) {
-                    sync.set(key, value, SetArgs.Builder.ex(expire));
-                } else {
-                    sync.set(key, value);
-                }
-            }
-        } finally {
-            returnObject(connection);
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+
+        RedisAdvancedClusterCommands<byte[], byte[]> sync = syncCommands();
+        if (expire > 0) {
+            sync.set(key, value, SetArgs.Builder.ex(expire));
+        } else {
+            sync.set(key, value);
         }
         return value;
     }
 
     @Override
     public void del(byte[] key) {
-        StatefulRedisClusterConnection<byte[], byte[]> connection = null;
-        try {
-            connection = getStatefulConnection();
-            if (isAsync) {
-                RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
-                async.del(key);
-            } else {
-                RedisAdvancedClusterCommands<byte[], byte[]> sync = connection.sync();
-                sync.del(key);
-            }
-        } finally {
-            returnObject(connection);
+        if (key == null) {
+            return;
         }
+        syncCommands().del(key);
     }
 
     @Override
     public Long dbSize(byte[] pattern) {
-        AtomicLong dbSize = new AtomicLong(0L);
-        StatefulRedisClusterConnection<byte[], byte[]> connection = null;
-        try {
-            connection = getStatefulConnection();
-            if (isAsync) {
-                RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
-                Partitions parse = ClusterPartitionParser.parse(LettuceFutures.awaitOrCancel(async.clusterNodes(), timeout.getSeconds(), TimeUnit.SECONDS));
-
-                parse.forEach(redisClusterNode -> {
-                    RedisClusterAsyncCommands<byte[], byte[]> clusterAsyncCommands = async.getConnection(redisClusterNode.getNodeId());
-
-                    KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
-                    scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
-                    ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
-                    while (!scanCursor.isFinished()) {
-                        scanCursor = LettuceFutures.awaitOrCancel(clusterAsyncCommands.scan(scanCursor, scanArgs), timeout.getSeconds(), TimeUnit.SECONDS);
-                        dbSize.addAndGet(scanCursor.getKeys().size());
-                    }
-                });
-            } else {
-                RedisAdvancedClusterCommands<byte[], byte[]> sync = connection.sync();
-                Partitions parse = ClusterPartitionParser.parse(sync.clusterNodes());
-
-                parse.forEach(redisClusterNode -> {
-                    RedisClusterCommands<byte[], byte[]> clusterCommands = sync.getConnection(redisClusterNode.getNodeId());
-
-                    KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
-                    scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
-                    ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
-                    while (!scanCursor.isFinished()) {
-                        scanCursor = clusterCommands.scan(scanCursor, scanArgs);
-                        dbSize.addAndGet(scanCursor.getKeys().size());
-                    }
-                });
-            }
-        } finally {
-            returnObject(connection);
+        if (pattern == null) {
+            return 0L;
         }
-        return dbSize.get();
+
+        AtomicLong total = new AtomicLong(0L);
+        RedisAdvancedClusterCommands<byte[], byte[]> sync = syncCommands();
+        Partitions partitions = ClusterPartitionParser.parse(sync.clusterNodes());
+
+        partitions.forEach(node -> {
+            if (!node.is(RedisClusterNode.NodeFlag.UPSTREAM)) {
+                return;
+            }
+
+            RedisClusterCommands<byte[], byte[]> commands = sync.getConnection(node.getNodeId());
+            ScanCursor cursor = ScanCursor.INITIAL;
+            ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
+
+            do {
+                KeyScanCursor<byte[]> keyScanCursor = commands.scan(cursor, scanArgs);
+                total.addAndGet(keyScanCursor.getKeys().size());
+                cursor = keyScanCursor;
+            } while (!cursor.isFinished());
+        });
+
+        return total.get();
     }
 
     @Override
     public Set<byte[]> keys(byte[] pattern) {
-        Set<byte[]> keys = new HashSet<>();
-        StatefulRedisClusterConnection<byte[], byte[]> connection = null;
-        try {
-            connection = getStatefulConnection();
-            if (isAsync) {
-                RedisAdvancedClusterAsyncCommands<byte[], byte[]> async = connection.async();
-                Partitions parse = ClusterPartitionParser.parse(LettuceFutures.awaitOrCancel(async.clusterNodes(), timeout.getSeconds(), TimeUnit.SECONDS));
-
-                parse.forEach(redisClusterNode -> {
-                    RedisClusterAsyncCommands<byte[], byte[]> clusterAsyncCommands = async.getConnection(redisClusterNode.getNodeId());
-
-                    KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
-                    scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
-                    ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
-                    while (!scanCursor.isFinished()) {
-                        scanCursor = LettuceFutures.awaitOrCancel(clusterAsyncCommands.scan(scanCursor, scanArgs), timeout.getSeconds(), TimeUnit.SECONDS);
-                        keys.addAll(scanCursor.getKeys());
-                    }
-                });
-            } else {
-                RedisAdvancedClusterCommands<byte[], byte[]> sync = connection.sync();
-                Partitions parse = ClusterPartitionParser.parse(sync.clusterNodes());
-
-                parse.forEach(redisClusterNode -> {
-                    RedisClusterCommands<byte[], byte[]> clusterCommands = sync.getConnection(redisClusterNode.getNodeId());
-
-                    KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
-                    scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
-                    ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
-                    while (!scanCursor.isFinished()) {
-                        scanCursor = clusterCommands.scan(scanCursor, scanArgs);
-                        keys.addAll(scanCursor.getKeys());
-                    }
-                });
-            }
-        } finally {
-            returnObject(connection);
+        if (pattern == null) {
+            return Collections.emptySet();
         }
+
+        Set<byte[]> keys = new HashSet<>();
+        RedisAdvancedClusterCommands<byte[], byte[]> sync = syncCommands();
+        Partitions partitions = ClusterPartitionParser.parse(sync.clusterNodes());
+
+        partitions.forEach(node -> {
+            if (!node.is(RedisClusterNode.NodeFlag.UPSTREAM)) {
+                return;
+            }
+
+            RedisClusterCommands<byte[], byte[]> commands = sync.getConnection(node.getNodeId());
+            ScanCursor cursor = ScanCursor.INITIAL;
+            ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
+
+            do {
+                KeyScanCursor<byte[]> keyScanCursor = commands.scan(cursor, scanArgs);
+                keys.addAll(keyScanCursor.getKeys());
+                cursor = keyScanCursor;
+            } while (!cursor.isFinished());
+        });
+
         return keys;
     }
 
     @Override
-    public void close() throws Exception {
-        if (genericObjectPool != null) {
-            genericObjectPool.close();
+    public void close() {
+        closed = true;
+
+        StatefulRedisClusterConnection<byte[], byte[]> conn = this.connection;
+        RedisClusterClient client = this.redisClusterClient;
+
+        this.connection = null;
+        this.redisClusterClient = null;
+
+        if (conn != null) {
+            try {
+                conn.close();
+            } catch (Exception ignored) {
+            }
         }
-        if (redisClusterClient != null) {
-            redisClusterClient.shutdown();
+
+        if (client != null) {
+            try {
+                client.shutdown();
+            } catch (Exception ignored) {
+            }
         }
+    }
+
+    public void init() {
+        initialize();
     }
 
     public List<String> getNodes() {
@@ -320,28 +296,12 @@ public class LettuceRedisClusterManager implements IRedisManager, AutoCloseable 
         this.timeout = timeout;
     }
 
-    public int getDatabase() {
-        return database;
-    }
-
-    public void setDatabase(int database) {
-        this.database = database;
-    }
-
     public String getPassword() {
         return password;
     }
 
     public void setPassword(String password) {
         this.password = password;
-    }
-
-    public boolean isAsync() {
-        return isAsync;
-    }
-
-    public void setIsAsync(boolean isAsync) {
-        this.isAsync = isAsync;
     }
 
     public int getCount() {
@@ -352,19 +312,11 @@ public class LettuceRedisClusterManager implements IRedisManager, AutoCloseable 
         this.count = count;
     }
 
-    public GenericObjectPoolConfig<StatefulRedisClusterConnection<byte[], byte[]>> getGenericObjectPoolConfig() {
-        return genericObjectPoolConfig;
+    public RedisClusterClient getRedisClusterClient() {
+        return redisClusterClient;
     }
 
-    public void setGenericObjectPoolConfig(GenericObjectPoolConfig<StatefulRedisClusterConnection<byte[], byte[]>> genericObjectPoolConfig) {
-        this.genericObjectPoolConfig = genericObjectPoolConfig;
-    }
-
-    public GenericObjectPool<StatefulRedisClusterConnection<byte[], byte[]>> getGenericObjectPool() {
-        return genericObjectPool;
-    }
-
-    public void setGenericObjectPool(GenericObjectPool<StatefulRedisClusterConnection<byte[], byte[]>> genericObjectPool) {
-        this.genericObjectPool = genericObjectPool;
+    public StatefulRedisClusterConnection<byte[], byte[]> getStatefulConnection() {
+        return connection;
     }
 }

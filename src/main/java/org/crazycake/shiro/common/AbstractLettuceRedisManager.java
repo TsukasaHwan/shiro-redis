@@ -2,29 +2,27 @@ package org.crazycake.shiro.common;
 
 import io.lettuce.core.*;
 import io.lettuce.core.api.StatefulRedisConnection;
-import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.lettuce.core.api.sync.RedisCommands;
-import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.crazycake.shiro.IRedisManager;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
+ * Base lettuce redis manager without connection pool.
+ *
  * @author Teamo
  * @since 2022/05/19
  */
-public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnection<byte[], byte[]>> implements IRedisManager, AutoCloseable {
+public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnection<byte[], byte[]>>
+        implements IRedisManager, AutoCloseable {
 
-    /**
-     * Default value of count.
-     */
     private static final int DEFAULT_COUNT = 100;
 
     /**
-     * timeout for RedisClient try to connect to redis server, not expire time! unit seconds.
+     * timeout for RedisClient to connect to redis server, not expire time.
      */
     private Duration timeout = RedisURI.DEFAULT_TIMEOUT_DURATION;
 
@@ -39,12 +37,7 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
     private String password;
 
     /**
-     * Whether to enable async.
-     */
-    private boolean isAsync = true;
-
-    /**
-     * The number of elements returned at every iteration.
+     * Number of elements returned at every scan iteration.
      */
     private int count = DEFAULT_COUNT;
 
@@ -54,23 +47,19 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
     private ClientOptions clientOptions = ClientOptions.create();
 
     /**
-     * genericObjectPoolConfig used to initialize GenericObjectPoolConfig object.
+     * Get shared connection.
      */
-    private GenericObjectPoolConfig<T> genericObjectPoolConfig = new GenericObjectPoolConfig<>();
+    protected abstract T getConnection();
 
-    /**
-     * Get a stateful connection.
-     *
-     * @return T
-     */
-    protected abstract T getStatefulConnection();
+    protected RedisCommands<byte[], byte[]> syncCommands() {
+        return getConnection().sync();
+    }
 
-    /**
-     * Return a stateful connection.
-     *
-     * @param connect T
-     */
-    protected abstract void returnObject(T connect);
+    protected void validateBaseConfiguration() {
+        if (count <= 0) {
+            throw new IllegalArgumentException("count must be greater than 0");
+        }
+    }
 
     public Duration getTimeout() {
         return timeout;
@@ -96,14 +85,6 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
         this.password = password;
     }
 
-    public boolean isAsync() {
-        return isAsync;
-    }
-
-    public void setIsAsync(boolean isAsync) {
-        this.isAsync = isAsync;
-    }
-
     public int getCount() {
         return count;
     }
@@ -120,35 +101,12 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
         this.clientOptions = clientOptions;
     }
 
-    public GenericObjectPoolConfig<T> getGenericObjectPoolConfig() {
-        return genericObjectPoolConfig;
-    }
-
-    public void setGenericObjectPoolConfig(GenericObjectPoolConfig<T> genericObjectPoolConfig) {
-        this.genericObjectPoolConfig = genericObjectPoolConfig;
-    }
-
     @Override
     public byte[] get(byte[] key) {
         if (key == null) {
             return null;
         }
-        byte[] value = null;
-        T connect = null;
-        try {
-            connect = getStatefulConnection();
-            if (isAsync) {
-                RedisAsyncCommands<byte[], byte[]> async = connect.async();
-                RedisFuture<byte[]> redisFuture = async.get(key);
-                value = LettuceFutures.awaitOrCancel(redisFuture, timeout.getSeconds(), TimeUnit.SECONDS);
-            } else {
-                RedisCommands<byte[], byte[]> sync = connect.sync();
-                value = sync.get(key);
-            }
-        } finally {
-            returnObject(connect);
-        }
-        return value;
+        return syncCommands().get(key);
     }
 
     @Override
@@ -156,103 +114,64 @@ public abstract class AbstractLettuceRedisManager<T extends StatefulRedisConnect
         if (key == null) {
             return null;
         }
-        T connect = null;
-        try {
-            connect = getStatefulConnection();
-            if (isAsync) {
-                RedisAsyncCommands<byte[], byte[]> async = connect.async();
-                if (expire > 0) {
-                    async.set(key, value, SetArgs.Builder.ex(expire));
-                } else {
-                    async.set(key, value);
-                }
-            } else {
-                RedisCommands<byte[], byte[]> sync = connect.sync();
-                if (expire > 0) {
-                    sync.set(key, value, SetArgs.Builder.ex(expire));
-                } else {
-                    sync.set(key, value);
-                }
-            }
-        } finally {
-            returnObject(connect);
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+
+        RedisCommands<byte[], byte[]> sync = syncCommands();
+        if (expire > 0) {
+            sync.set(key, value, SetArgs.Builder.ex(expire));
+        } else {
+            sync.set(key, value);
         }
         return value;
     }
 
     @Override
     public void del(byte[] key) {
-        T connect = null;
-        try {
-            connect = getStatefulConnection();
-            if (isAsync) {
-                RedisAsyncCommands<byte[], byte[]> async = connect.async();
-                async.del(key);
-            } else {
-                RedisCommands<byte[], byte[]> sync = connect.sync();
-                sync.del(key);
-            }
-        } finally {
-            returnObject(connect);
+        if (key == null) {
+            return;
         }
+        syncCommands().del(key);
     }
 
     @Override
     public Long dbSize(byte[] pattern) {
-        long dbSize = 0L;
-        KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
-        scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
-        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
-        T connect = null;
-        try {
-            connect = getStatefulConnection();
-            while (!scanCursor.isFinished()) {
-                scanCursor = getKeyScanCursor(connect, scanCursor, scanArgs);
-                dbSize += scanCursor.getKeys().size();
-            }
-        } finally {
-            returnObject(connect);
+        if (pattern == null) {
+            return 0L;
         }
-        return dbSize;
+
+        long total = 0L;
+        RedisCommands<byte[], byte[]> sync = syncCommands();
+        ScanCursor cursor = ScanCursor.INITIAL;
+        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
+
+        do {
+            KeyScanCursor<byte[]> keyScanCursor = sync.scan(cursor, scanArgs);
+            total += keyScanCursor.getKeys().size();
+            cursor = keyScanCursor;
+        } while (!cursor.isFinished());
+
+        return total;
     }
 
     @Override
     public Set<byte[]> keys(byte[] pattern) {
-        Set<byte[]> keys = new HashSet<>();
-        KeyScanCursor<byte[]> scanCursor = new KeyScanCursor<>();
-        scanCursor.setCursor(ScanCursor.INITIAL.getCursor());
-        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
-        T connect = null;
-        try {
-            connect = getStatefulConnection();
-            while (!scanCursor.isFinished()) {
-                scanCursor = getKeyScanCursor(connect, scanCursor, scanArgs);
-                keys.addAll(scanCursor.getKeys());
-            }
-        } finally {
-            returnObject(connect);
+        if (pattern == null) {
+            return Collections.emptySet();
         }
-        return keys;
-    }
 
-    /**
-     * get scan cursor result
-     *
-     * @param connect    connection
-     * @param scanCursor scan cursor
-     * @param scanArgs   scan param
-     * @return KeyScanCursor
-     */
-    private KeyScanCursor<byte[]> getKeyScanCursor(final StatefulRedisConnection<byte[], byte[]> connect,
-                                                   KeyScanCursor<byte[]> scanCursor,
-                                                   ScanArgs scanArgs) {
-        if (isAsync) {
-            RedisAsyncCommands<byte[], byte[]> async = connect.async();
-            scanCursor = LettuceFutures.awaitOrCancel(async.scan(scanCursor, scanArgs), timeout.getSeconds(), TimeUnit.SECONDS);
-        } else {
-            RedisCommands<byte[], byte[]> sync = connect.sync();
-            scanCursor = sync.scan(scanCursor, scanArgs);
-        }
-        return scanCursor;
+        Set<byte[]> keys = new HashSet<>();
+        RedisCommands<byte[], byte[]> sync = syncCommands();
+        ScanCursor cursor = ScanCursor.INITIAL;
+        ScanArgs scanArgs = ScanArgs.Builder.matches(pattern).limit(count);
+
+        do {
+            KeyScanCursor<byte[]> keyScanCursor = sync.scan(cursor, scanArgs);
+            keys.addAll(keyScanCursor.getKeys());
+            cursor = keyScanCursor;
+        } while (!cursor.isFinished());
+
+        return keys;
     }
 }
